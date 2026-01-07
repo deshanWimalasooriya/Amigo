@@ -41,7 +41,7 @@ const Header = () => {
         {/* User Profile Dropdown */}
         <div className="user-profile-pill">
           <div className="avatar-small">A</div>
-          <span className="username">Alex Sterling</span>
+          <span className="username" onClick={() => navigate('./user-profile')}>Alex Sterling</span>
           <FaChevronDown className="chevron-icon" />
         </div>
       </div>
