@@ -1,0 +1,246 @@
+.dashboard-wrapper {
+  min-height: 100vh;
+  background-color: #0f172a; /* Deep Navy */
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  overflow-x: hidden;
+}
+
+.dashboard-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 3rem 2rem;
+}
+
+/* --- Welcome Banner --- */
+.welcome-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 3rem;
+}
+
+.welcome-info h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+  color: white;
+}
+
+.date-text {
+  color: #94a3b8;
+  font-size: 1rem;
+}
+
+/* Primary "Start Meeting" Button Group */
+.primary-action {
+  display: flex;
+  align-items: center;
+  background: #6366f1; /* Brand Indigo */
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+  transition: transform 0.2s;
+}
+.primary-action:hover {
+  transform: translateY(-2px);
+  background: #4f46e5;
+}
+.btn-new-meeting {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 12px 20px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.split-line {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.3);
+}
+.btn-dropdown {
+  background: transparent;
+  border: none;
+  color: white;
+  padding: 12px 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+.btn-dropdown:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* --- Quick Actions (Professional Cards) --- */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.action-card {
+  background: #1e293b; /* Slate */
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-card:hover {
+  background: #253045;
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
+}
+
+.icon-box {
+  width: 48px;
+  height: 48px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+.blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+.purple { background: rgba(139, 92, 246, 0.15); color: #a78bfa; }
+.teal { background: rgba(20, 184, 166, 0.15); color: #2dd4bf; }
+
+.action-details h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+.action-details p {
+  margin: 4px 0 0 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+/* --- Data Split View --- */
+.data-split-view {
+  display: grid;
+  grid-template-columns: 2fr 1fr; /* 2/3rds for Main, 1/3rd for Side */
+  gap: 2rem;
+}
+
+.data-section {
+  background: #1e293b;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.section-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+.view-all {
+  font-size: 0.85rem;
+  color: #6366f1;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+/* Meeting Table */
+.table-row {
+  display: flex;
+  align-items: center;
+  padding: 1rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.table-row:last-child { border-bottom: none; }
+
+.time-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-right: 1.5rem;
+  min-width: 60px;
+}
+.time-large {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: white;
+}
+.time-am-pm {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+.info-col { flex: 1; }
+.info-col h4 { margin: 0 0 4px 0; font-size: 1rem; }
+.info-col p { margin: 0; font-size: 0.85rem; color: #94a3b8; }
+
+.btn-start-small {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+.btn-start-small:hover { background: #4f46e5; }
+
+.btn-join-small {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.btn-join-small:hover { border-color: white; }
+
+/* Side List */
+.history-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 1.2rem;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  background: #94a3b8;
+  border-radius: 50%;
+  margin-top: 6px;
+}
+.history-meta h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #e2e8f0;
+}
+.history-meta span {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+.more-options { color: #64748b; cursor: pointer; }
