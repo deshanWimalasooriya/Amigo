@@ -4,6 +4,7 @@ import { FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop, FaEllipsisH } from 'rea
 import './styles/Dashboard.css'; // Make sure this path matches your folder structure
 
 const Dashboard = () => {
+
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
