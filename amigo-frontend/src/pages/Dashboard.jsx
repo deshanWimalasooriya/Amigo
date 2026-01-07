@@ -22,7 +22,7 @@ const Dashboard = () => {
             <h1>Good Afternoon, Alex</h1>
             <p className="date-text">{currentDate} • You have 2 meetings today</p>
           </div>
-          <div className="primary-action">
+          <div className="primary-action" onClick={() => navigate('/new-meeting')}>
             <button className="btn-new-meeting">
               <FaVideo className="btn-icon" /> New Meeting
             </button>
@@ -33,7 +33,7 @@ const Dashboard = () => {
 
         {/* 2. Quick Actions Bar (Clean, Professional Icons) */}
         <section className="quick-actions">
-          <div className="action-card">
+          <div className="action-card" onClick={() => navigate('/join')}>
             <div className="icon-box blue"><FaKeyboard /></div>
             <div className="action-details">
               <h3>Join with Code</h3>

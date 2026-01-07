@@ -8,6 +8,9 @@ import WelcomePage from './pages/WelcomePage';
 import AuthPage from './pages/AuthPage';
 import UserProfile from './pages/UserProfile.jsx';
 import ScheduleMeeting from './pages/ScheduleMeeting.jsx';
+import JoinMeeting from './pages/JoinMeeting.jsx';
+import NewMeeting from './pages/NewMeeting.jsx';
+import Room from './pages/Room.jsx';
 import './index.css';
 
 function App() {
@@ -20,6 +23,9 @@ function App() {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/user-profile" element={<UserProfile />} />
           <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
+          <Route path="/join" element={<JoinMeeting />} />
+          <Route path="/new-meeting" element={<NewMeeting />} />
+          <Route path="/room" element={<Room />} />
         </Routes>
       </div>
     </Router>
