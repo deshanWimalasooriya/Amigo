@@ -1,0 +1,224 @@
+.team-wrapper {
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+}
+
+.team-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-top: 110px; /* Fixed header offset */
+  padding-bottom: 3rem;
+  padding-left: 2rem;
+  padding-right: 2rem;
+}
+
+/* --- Header --- */
+.team-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 2rem;
+}
+
+.header-text h2 { margin: 0 0 5px 0; font-size: 1.8rem; }
+.header-text p { color: #94a3b8; margin: 0; font-size: 0.95rem; }
+
+.btn-invite {
+  background: #6366f1;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: background 0.2s;
+}
+.btn-invite:hover { background: #4f46e5; }
+
+/* --- Stats Bar --- */
+.stats-bar {
+  display: flex;
+  align-items: center;
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 1rem 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  gap: 2rem;
+}
+
+.stat-item { display: flex; flex-direction: column; }
+.stat-value { font-size: 1.5rem; font-weight: 700; color: white; line-height: 1; }
+.stat-label { font-size: 0.8rem; color: #94a3b8; margin-top: 4px; }
+.divider-v { width: 1px; height: 30px; background: rgba(255, 255, 255, 0.1); }
+
+/* --- Controls Row --- */
+.controls-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 2rem;
+}
+
+.tabs-pill {
+  background: rgba(30, 41, 59, 0.6);
+  padding: 4px;
+  border-radius: 50px;
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.pill-btn {
+  background: transparent;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 50px;
+  color: #94a3b8;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pill-btn.active {
+  background: #6366f1;
+  color: white;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
+}
+
+.search-pill {
+  position: relative;
+  width: 250px;
+}
+.search-pill svg {
+  position: absolute;
+  left: 14px; top: 50%; transform: translateY(-50%);
+  color: #64748b;
+}
+.search-pill input {
+  width: 100%;
+  padding: 10px 10px 10px 40px;
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50px;
+  color: white;
+  outline: none;
+}
+.search-pill input:focus { border-color: #6366f1; }
+
+/* --- Member Grid --- */
+.team-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.member-card {
+  position: relative;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  overflow: hidden; /* For hover effect */
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.member-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 15px 30px rgba(0, 0, 0, 0.4);
+  border-color: rgba(99, 102, 241, 0.2);
+}
+
+/* Status & Menu */
+.card-top-actions {
+  position: absolute;
+  top: 15px; left: 15px; right: 15px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.status-dot { width: 10px; height: 10px; border-radius: 50%; border: 2px solid #1e293b; }
+.status-dot.online { background: #10b981; box-shadow: 0 0 8px #10b981; }
+.status-dot.busy { background: #ef4444; }
+.status-dot.offline { background: #94a3b8; }
+
+.btn-icon-dots { background: transparent; border: none; color: #64748b; cursor: pointer; }
+.btn-icon-dots:hover { color: white; }
+
+/* Avatar */
+.member-avatar {
+  width: 80px; height: 80px;
+  border-radius: 50%;
+  margin: 0 auto 1rem auto;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.8rem; font-weight: 700; color: white;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+
+/* Text Info */
+.member-name {
+  margin: 0 0 5px 0; font-size: 1.1rem; color: white;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.crown-icon { color: #f59e0b; font-size: 0.9rem; }
+
+.member-email { font-size: 0.85rem; color: #94a3b8; margin: 0 0 10px 0; }
+
+.member-role-badge {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  font-size: 0.75rem;
+  color: #cbd5e1;
+}
+
+/* Hover Actions (Slide Up) */
+.hover-actions {
+  position: absolute;
+  bottom: 0; left: 0; width: 100%;
+  background: rgba(30, 41, 59, 0.95);
+  backdrop-filter: blur(5px);
+  padding: 1.5rem;
+  display: flex; justify-content: center; gap: 10px;
+  transform: translateY(100%); /* Hidden by default */
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.member-card:hover .hover-actions {
+  transform: translateY(0); /* Slide up on hover */
+}
+
+.action-chip {
+  flex: 1;
+  border: none; padding: 8px 0; border-radius: 6px;
+  font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+}
+.action-chip.primary { background: #6366f1; color: white; }
+.action-chip.primary:hover { background: #4f46e5; }
+.action-chip.secondary { background: rgba(255, 255, 255, 0.1); color: white; }
+.action-chip.secondary:hover { background: rgba(255, 255, 255, 0.2); }
+
+/* --- Pending List --- */
+.pending-list { display: flex; flex-direction: column; gap: 1rem; }
+.invite-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: #1e293b; padding: 1rem 1.5rem; border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.invite-info { display: flex; align-items: center; gap: 1rem; }
+.icon-envelope {
+  width: 40px; height: 40px; background: rgba(99, 102, 241, 0.1); color: #818cf8;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+}
+.invite-info h4 { margin: 0; font-size: 1rem; color: white; }
+.invite-info span { font-size: 0.85rem; color: #64748b; }
+
+.btn-revoke {
+  background: transparent; color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);
+  padding: 6px 14px; border-radius: 6px; cursor: pointer;
+  display: flex; align-items: center; gap: 6px; font-size: 0.85rem;
+  transition: all 0.2s;
+}
+.btn-revoke:hover { background: rgba(239, 68, 68, 0.1); }
