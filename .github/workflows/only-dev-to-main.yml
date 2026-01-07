@@ -1,0 +1,19 @@
+name: Allow only dev to main
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check source branch
+        run: |
+          echo "Source branch: ${{ github.head_ref }}"
+          if [ "${{ github.head_ref }}" != "dev" ]; then
+            echo "❌ Only dev branch can be merged into main"
+            exit 1
+          fi
+          echo "✅ Merge allowed from dev"
