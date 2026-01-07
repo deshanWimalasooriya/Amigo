@@ -2,8 +2,11 @@ import React from 'react';
 import Header from '../components/Header'; // Import your new Header
 import { FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop, FaEllipsisH } from 'react-icons/fa';
 import './styles/Dashboard.css'; // Make sure this path matches your folder structure
+import { useNavigate } from 'react-router-dom'
 
 const Dashboard = () => {
+
+  const navigate = useNavigate();
 
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
 
@@ -38,7 +41,7 @@ const Dashboard = () => {
             </div>
           </div>
           
-          <div className="action-card">
+          <div className="action-card" onClick={() => navigate('/schedule-meeting')}>
             <div className="icon-box purple"><FaCalendarPlus /></div>
             <div className="action-details">
               <h3>Schedule</h3>

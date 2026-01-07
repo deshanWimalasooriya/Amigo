@@ -1,0 +1,184 @@
+.schedule-wrapper {
+  min-height: 100vh;
+  background-color: #0f172a;
+  color: #fff;
+  font-family: 'Inter', sans-serif;
+  overflow-y: auto;
+}
+
+.schedule-container {
+  max-width: 1100px;
+  margin: 3rem auto;
+  padding: 0 2rem;
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr; /* Form is wider than preview */
+  gap: 4rem;
+  align-items: start;
+}
+
+/* --- LEFT: Form Panel --- */
+.form-panel {
+  background: #1e293b;
+  border-radius: 16px;
+  padding: 2.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.panel-header { margin-bottom: 2rem; }
+.panel-header h2 { margin: 10px 0 5px 0; font-size: 1.5rem; }
+.panel-header p { color: #94a3b8; margin: 0; font-size: 0.9rem; }
+
+.icon-badge {
+  width: 40px; height: 40px; background: rgba(99, 102, 241, 0.15);
+  color: #818cf8; border-radius: 10px; display: flex; align-items: center;
+  justify-content: center; font-size: 1.2rem;
+}
+
+/* Inputs */
+.form-group { margin-bottom: 1.5rem; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+
+.form-group label {
+  display: block; font-size: 0.85rem; color: #94a3b8;
+  margin-bottom: 8px; font-weight: 500;
+}
+
+.input-icon-wrapper {
+  position: relative;
+  display: flex; align-items: center;
+}
+
+.field-icon {
+  position: absolute; left: 14px; color: #64748b; z-index: 10;
+}
+
+input[type="text"], input[type="date"], input[type="time"], select {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 12px 14px;
+  padding-left: 40px; /* Space for icon */
+  border-radius: 8px;
+  color: white;
+  font-size: 0.95rem;
+  font-family: 'Inter', sans-serif;
+  outline: none;
+  transition: all 0.2s;
+}
+
+/* Fix padding for inputs without icons if needed, but we used wrapper logic */
+input[type="date"], input[type="time"] { padding-left: 14px; } /* Reset for standard HTML5 inputs */
+
+input:focus, select:focus {
+  border-color: #6366f1;
+  background: rgba(15, 23, 42, 0.8);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+/* Toggles */
+.toggle-section {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 2rem;
+}
+
+.toggle-row {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1rem;
+}
+.toggle-row:last-child { margin-bottom: 0; }
+
+.toggle-label span { display: block; font-weight: 500; }
+.toggle-label small { color: #64748b; font-size: 0.8rem; }
+
+/* CSS Toggle Switch */
+.switch {
+  position: relative; display: inline-block; width: 44px; height: 24px;
+}
+.switch input { opacity: 0; width: 0; height: 0; }
+.slider {
+  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #334155; transition: .4s; border-radius: 34px;
+}
+.slider:before {
+  position: absolute; content: ""; height: 18px; width: 18px;
+  left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%;
+}
+input:checked + .slider { background-color: #6366f1; }
+input:checked + .slider:before { transform: translateX(20px); }
+
+/* Buttons */
+.form-actions { display: flex; justify-content: flex-end; gap: 1rem; }
+.btn-save {
+  background: #6366f1; color: white; border: none; padding: 12px 24px;
+  border-radius: 8px; font-weight: 600; cursor: pointer;
+}
+.btn-save:hover { background: #4f46e5; }
+.btn-cancel {
+  background: transparent; color: #94a3b8; border: none; cursor: pointer;
+}
+.btn-cancel:hover { color: white; }
+
+
+/* --- RIGHT: Live Preview --- */
+.preview-panel {
+  position: sticky; top: 100px;
+}
+
+.preview-label {
+  font-size: 0.75rem; font-weight: 700; color: #64748b; letter-spacing: 1px;
+  margin-bottom: 1rem; text-align: center;
+}
+
+.invite-card {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.6), rgba(15, 23, 42, 0.8));
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 2rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.invite-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 1.5rem;
+  color: #94a3b8; font-size: 0.9rem; font-weight: 600;
+}
+
+.invite-body { text-align: center; }
+.invite-body h3 { font-size: 1.4rem; margin: 0 0 1.5rem 0; line-height: 1.3; }
+
+.invite-details {
+  text-align: left; background: rgba(0, 0, 0, 0.2); padding: 1rem;
+  border-radius: 12px; margin-bottom: 1.5rem;
+}
+
+.detail-item {
+  display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 0.9rem;
+}
+.detail-item .label { color: #94a3b8; }
+.detail-item .value { font-weight: 600; }
+
+.invite-link-box {
+  background: #0f172a; padding: 10px; border-radius: 8px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 1.5rem; border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+.invite-link-box p {
+  margin: 0; font-size: 0.8rem; color: #6366f1;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 200px;
+}
+.copy-icon { color: #64748b; cursor: pointer; }
+
+.btn-preview-join {
+  width: 100%; background: #10b981; color: white; border: none; padding: 12px;
+  border-radius: 8px; font-weight: 700; cursor: default;
+}
+
+.invite-footer {
+  margin-top: 1.5rem; border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 1rem; display: flex; align-items: center; justify-content: center;
+  gap: 8px; font-size: 0.85rem; color: #94a3b8;
+}
+.icon-on { color: #10b981; }
+.icon-off { color: #ef4444; }
