@@ -1,6 +1,7 @@
 import React from 'react';
-import './styles/WelcomePage.css'; // Importing specific styles for WelcomePage
-import { FaVideo, FaShieldAlt, FaGlobe } from 'react-icons/fa'; // Icons for features
+import { Link } from 'react-router-dom'; // <-- This fixes your error
+import './styles/WelcomePage.css';
+import { FaVideo, FaShieldAlt, FaGlobe } from 'react-icons/fa';
 
 const WelcomePage = () => {
   return (
@@ -13,7 +14,9 @@ const WelcomePage = () => {
         <div className="nav-links">
           <a href="#features">Features</a>
           <a href="#pricing">Pricing</a>
-          <button className="btn-login">Log In</button>
+          
+          {/* Linked to your new Auth Page */}
+          <Link to="/auth" className="btn-login">Log In</Link>
         </div>
       </nav>
 
@@ -31,7 +34,11 @@ const WelcomePage = () => {
           </p>
           
           <div className="cta-group">
-            <button className="btn-primary">Get Started Free</button>
+            {/* Main Call to Action also links to Auth */}
+            <Link to="/auth">
+              <button className="btn-primary">Get Started Free</button>
+            </Link>
+            
             <button className="btn-outline">View Demo</button>
           </div>
 
