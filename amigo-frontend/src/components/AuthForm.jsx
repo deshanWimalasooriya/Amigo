@@ -2,10 +2,9 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
-import './styles/AuthForm.css';
+import './styles/AuthForm.css'; // Make sure this path matches where you saved the CSS
 
 const AuthForm = () => {
-
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
 
@@ -13,17 +12,10 @@ const AuthForm = () => {
   const toggleMode = () => setIsLogin(!isLogin);
 
   const handleSubmit = (e) => {
-  e.preventDefault();
-  // Simulate login success
-  console.log("Logged in!");
-  navigate('/dashboard'); // <--- Navigation Magic
-};
-
-  // Animation Variants
-  const formVariants = {
-    hidden: { opacity: 0, x: -50 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.5 } },
-    exit: { opacity: 0, x: 50, transition: { duration: 0.3 } }
+    e.preventDefault();
+    // Simulate login success
+    console.log(isLogin ? "Logged In" : "Registered");
+    navigate('/dashboard'); 
   };
 
   return (
@@ -40,9 +32,9 @@ const AuthForm = () => {
 
       {/* Form Section */}
       <form onSubmit={handleSubmit} className="auth-form-container">
+        
+        {/* FIX: Animation ONLY wraps the conditional Name field */}
         <AnimatePresence mode='wait'>
-          
-          {/* REGISTER: Name Input (Only shows if NOT login) */}
           {!isLogin && (
             <motion.div 
               key="name-field"
@@ -55,21 +47,20 @@ const AuthForm = () => {
               <input type="text" placeholder="Full Name" required />
             </motion.div>
           )}
-
-          {/* COMMON: Email Input */}
-          <div className="input-group">
-            <FaEnvelope className="input-icon" />
-            <input type="email" placeholder="Email Address" required />
-          </div>
-
-          {/* COMMON: Password Input */}
-          <div className="input-group">
-            <FaLock className="input-icon" />
-            <input type="password" placeholder="Password" required />
-          </div>
-          
         </AnimatePresence>
 
+        {/* COMMON: Email Input (Outside animation wrapper) */}
+        <div className="input-group">
+          <FaEnvelope className="input-icon" />
+          <input type="email" placeholder="Email Address" required />
+        </div>
+
+        {/* COMMON: Password Input (Outside animation wrapper) */}
+        <div className="input-group">
+          <FaLock className="input-icon" />
+          <input type="password" placeholder="Password" required />
+        </div>
+          
         {/* Forgot Password Link (Login Only) */}
         {isLogin && (
           <div className="forgot-pass">
