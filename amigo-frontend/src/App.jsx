@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard.jsx';
 import WelcomePage from './pages/WelcomePage';
 import AuthPage from './pages/AuthPage';
 import UserProfile from './pages/UserProfile.jsx';
+import ScheduleMeeting from './pages/ScheduleMeeting.jsx';
 import './index.css';
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
           <Route path="/auth" element={<AuthPage />} /> 
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/dashboard/user-profile" element={<UserProfile />} />
+          <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
         </Routes>
       </div>
     </Router>
