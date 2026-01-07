@@ -8,22 +8,19 @@
   --text-primary: #ffffff;
 }
 
-/* KEY FIX: Lock the html and body elements */
+/* FIX: Changed 'overflow: hidden' to 'auto' to allow scrolling globally */
 html, body {
   margin: 0;
   padding: 0;
   width: 100%;
-  height: 100%;
-  overflow: hidden; /* This forbids the browser from scrolling */
+  min-height: 100vh; /* Changed height to min-height */
+  overflow: auto;    /* FIX: Allows scrolling by default */
   background-color: var(--bg-primary);
-  overscroll-behavior: none; /* Prevents the "bounce" effect on Mac/Mobile */
 }
 
-/* Ensure React's root div also fills the screen exactly */
 #root {
   width: 100%;
-  height: 100%;
-  overflow: hidden;
+  min-height: 100vh;
 }
 
 * {

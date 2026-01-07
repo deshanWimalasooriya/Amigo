@@ -2,8 +2,12 @@ import React from 'react';
 import Header from '../components/Header'; // Import your new Header
 import { FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop, FaEllipsisH } from 'react-icons/fa';
 import './styles/Dashboard.css'; // Make sure this path matches your folder structure
+import { useNavigate } from 'react-router-dom'
 
 const Dashboard = () => {
+
+  const navigate = useNavigate();
+
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long' });
 
   return (
@@ -18,7 +22,7 @@ const Dashboard = () => {
             <h1>Good Afternoon, Alex</h1>
             <p className="date-text">{currentDate} • You have 2 meetings today</p>
           </div>
-          <div className="primary-action">
+          <div className="primary-action" onClick={() => navigate('/new-meeting')}>
             <button className="btn-new-meeting">
               <FaVideo className="btn-icon" /> New Meeting
             </button>
@@ -29,7 +33,7 @@ const Dashboard = () => {
 
         {/* 2. Quick Actions Bar (Clean, Professional Icons) */}
         <section className="quick-actions">
-          <div className="action-card">
+          <div className="action-card" onClick={() => navigate('/join')}>
             <div className="icon-box blue"><FaKeyboard /></div>
             <div className="action-details">
               <h3>Join with Code</h3>
@@ -37,7 +41,7 @@ const Dashboard = () => {
             </div>
           </div>
           
-          <div className="action-card">
+          <div className="action-card" onClick={() => navigate('/schedule-meeting')}>
             <div className="icon-box purple"><FaCalendarPlus /></div>
             <div className="action-details">
               <h3>Schedule</h3>
