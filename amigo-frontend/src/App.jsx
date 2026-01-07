@@ -11,6 +11,10 @@ import ScheduleMeeting from './pages/ScheduleMeeting.jsx';
 import JoinMeeting from './pages/JoinMeeting.jsx';
 import NewMeeting from './pages/NewMeeting.jsx';
 import Room from './pages/Room.jsx';
+import MyMeetings from './pages/MyMeetings.jsx';
+import Recordings from './pages/Recordings.jsx';
+import History from './pages/History.jsx';
+import Team from './pages/Team.jsx';
 import './index.css';
 
 function App() {
@@ -26,6 +30,10 @@ function App() {
           <Route path="/join" element={<JoinMeeting />} />
           <Route path="/new-meeting" element={<NewMeeting />} />
           <Route path="/room" element={<Room />} />
+          <Route path="/meetings" element={<MyMeetings />} />
+          <Route path="/recordings" element={<Recordings />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/team" element={<Team />} />
         </Routes>
       </div>
     </Router>
