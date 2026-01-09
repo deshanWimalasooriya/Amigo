@@ -2,20 +2,44 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
-import './styles/AuthForm.css'; // Make sure this path matches where you saved the CSS
+import './styles/AuthForm.css';
 
 const AuthForm = () => {
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
 
-  // Toggle between Login and Register
-  const toggleMode = () => setIsLogin(!isLogin);
+  // State to capture input values
+  const [formData, setFormData] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    confirmPassword: ''
+  });
+
+  // Handle Input Change
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  // Toggle Mode
+  const toggleMode = () => {
+    setIsLogin((prev) => !prev);
+    // Reset passwords to avoid confusion on switch
+    setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Simulate login success
-    console.log(isLogin ? "Logged In" : "Registered");
-    navigate('/dashboard'); 
+    if (isLogin) {
+      console.log("Logging in:", formData.email);
+    } else {
+      if (formData.password !== formData.confirmPassword) {
+        alert("Passwords do not match!");
+        return;
+      }
+      console.log("Registering:", formData.fullName);
+    }
+    navigate('/dashboard');
   };
 
   return (
@@ -33,34 +57,84 @@ const AuthForm = () => {
       {/* Form Section */}
       <form onSubmit={handleSubmit} className="auth-form-container">
         
-        {/* FIX: Animation ONLY wraps the conditional Name field */}
-        <AnimatePresence mode='wait'>
+        {/* 1. Full Name (Only shows in Register mode) */}
+        <AnimatePresence>
           {!isLogin && (
             <motion.div 
-              key="name-field"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="input-group"
+              key="fullname-field"
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
             >
-              <FaUser className="input-icon" />
-              <input type="text" placeholder="Full Name" required />
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <FaUser className="input-icon" />
+                <input 
+                  type="text" 
+                  name="fullName"
+                  placeholder="Full Name" 
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  required={!isLogin} 
+                />
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* COMMON: Email Input (Outside animation wrapper) */}
+        {/* 2. Email (Always Visible - Static to prevent duplication bugs) */}
         <div className="input-group">
           <FaEnvelope className="input-icon" />
-          <input type="email" placeholder="Email Address" required />
+          <input 
+            type="email" 
+            name="email"
+            placeholder="Email Address" 
+            value={formData.email}
+            onChange={handleChange}
+            required 
+          />
         </div>
 
-        {/* COMMON: Password Input (Outside animation wrapper) */}
+        {/* 3. Password (Always Visible) */}
         <div className="input-group">
           <FaLock className="input-icon" />
-          <input type="password" placeholder="Password" required />
+          <input 
+            type="password" 
+            name="password"
+            placeholder="Password" 
+            value={formData.password}
+            onChange={handleChange}
+            required 
+          />
         </div>
-          
+
+        {/* 4. Confirm Password (Only shows in Register mode) */}
+        <AnimatePresence>
+          {!isLogin && (
+            <motion.div 
+              key="confirm-field"
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <FaLock className="input-icon" />
+                <input 
+                  type="password" 
+                  name="confirmPassword"
+                  placeholder="Confirm Password" 
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  required={!isLogin}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Forgot Password Link (Login Only) */}
         {isLogin && (
           <div className="forgot-pass">
@@ -69,13 +143,9 @@ const AuthForm = () => {
         )}
 
         {/* Submit Button */}
-        <motion.button 
-          className="btn-submit-gradient"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          {isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight />
-        </motion.button>
+        <button type="submit" className="btn-submit-gradient">
+          {isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight style={{ marginLeft: '8px' }}/>
+        </button>
 
         {/* Divider */}
         <div className="divider"><span>OR</span></div>

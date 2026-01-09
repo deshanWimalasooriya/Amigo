@@ -25,7 +25,7 @@ function App() {
           <Route path="/" element={<WelcomePage />} />
           <Route path="/auth" element={<AuthPage />} /> 
           <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/dashboard/user-profile" element={<UserProfile />} />
+          <Route path="/user-profile" element={<UserProfile />} />
           <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
           <Route path="/join" element={<JoinMeeting />} />
           <Route path="/new-meeting" element={<NewMeeting />} />

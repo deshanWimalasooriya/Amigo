@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // Consolidated imports
 import './styles/WelcomePage.css';
 import Footer from '../components/Footer.jsx';
 import { FaVideo, FaShieldAlt, FaGlobe } from 'react-icons/fa';
+import amigoLogo from '../assets/Amigo.png'; 
 
 const WelcomePage = () => {
+  // FIX: Hook moved INSIDE the component
+  const navigate = useNavigate();
+
   const [displayedText, setDisplayedText] = useState({ line1: '', line2: '' });
   
   const text1 = "Premium Video Meetings";
@@ -61,7 +65,15 @@ const WelcomePage = () => {
     <div className="page-container">
       <nav className="navbar">
         <div className="nav-logo">
-          <span className="logo-emoji">🤝</span> Amigo
+          {/* Logo Click Handler */}
+          <div className="brand-logo" onClick={() => navigate('/')} style={{ cursor: 'pointer' }}>
+             <img 
+               src={amigoLogo} 
+               alt="Amigo Logo" 
+               className="logo-image"
+               style={{ height: '70px', width: 'auto', objectFit: 'contain' }} 
+             />
+          </div>
         </div>
         <div className="nav-links">
           <a href="#features">Features</a>
@@ -72,9 +84,6 @@ const WelcomePage = () => {
 
       <main className="hero-section">
         <div className="hero-content">
-          {/* <div className="badge">New v2.0 is live</div> */}
-          
-          {/* Fixed height container to prevent jumping */}
           <div className="title-container">
             <h1 className="hero-title">
               {displayedText.line1}<br />
@@ -124,7 +133,6 @@ const WelcomePage = () => {
         </div>
       </main>
 
-      {/* Add Footer Here at the bottom */}
       <Footer />
     </div>
   );

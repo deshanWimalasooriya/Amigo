@@ -1,6 +1,7 @@
 import React from 'react';
 import { FaTwitter, FaLinkedin, FaGithub, FaInstagram, FaArrowRight } from 'react-icons/fa';
 import './styles/Footer.css';
+import amigoLogo from '../assets/Amigo.png'; // 1. Import the logo
 
 const Footer = () => {
   return (
@@ -12,7 +13,12 @@ const Footer = () => {
         {/* Col 1: Brand & Social */}
         <div className="footer-col brand-col">
           <div className="footer-logo">
-            <span className="logo-emoji">🤝</span> Amigo
+            {/* 2. Replaced Emoji/Text with Image */}
+            <img 
+              src={amigoLogo} 
+              alt="Amigo Logo" 
+              style={{ height: '50px', width: 'auto', marginBottom: '10px' }} 
+            />
           </div>
           <p className="footer-desc">
             The next generation of video conferencing. 

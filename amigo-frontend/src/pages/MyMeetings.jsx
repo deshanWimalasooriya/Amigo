@@ -3,6 +3,7 @@ import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
 import { FaCalendarCheck, FaHistory, FaVideo, FaCopy, FaTrash, FaClock, FaEllipsisV } from 'react-icons/fa';
 import './styles/MyMeetings.css';
+import Footer from '../components/Footer';
 
 const MyMeetings = () => {
   const navigate = useNavigate();
@@ -144,6 +145,7 @@ const MyMeetings = () => {
         </div>
 
       </div>
+      <Footer />
     </div>
   );
 };

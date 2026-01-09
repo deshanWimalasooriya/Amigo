@@ -5,6 +5,7 @@ import {
   FaTrash, FaCrown, FaCircle 
 } from 'react-icons/fa';
 import './styles/Team.css';
+import Footer from '../components/Footer';
 
 const Team = () => {
   const [activeTab, setActiveTab] = useState('members'); // members | pending
@@ -181,6 +182,7 @@ const Team = () => {
         )}
 
       </div>
+      <Footer />
     </div>
   );
 };
