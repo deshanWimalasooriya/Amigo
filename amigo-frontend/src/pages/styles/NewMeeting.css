@@ -191,3 +191,14 @@
 .volume-slider { width: 80px; }
 .volume-track { width: 100%; height: 4px; background: #334155; border-radius: 2px; }
 .volume-level { height: 100%; background: #10b981; border-radius: 2px; }
+
+.real-video-preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1); /* Mirror effect */
+    border-radius: 12px;
+}
+.hidden {
+    display: none;
+}
