@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 
 
 // Importing Pages
@@ -20,22 +21,24 @@ import './index.css';
 function App() {
   return (
     <Router>
-      <div className="app-main">
-        <Routes>
-          <Route path="/" element={<WelcomePage />} />
-          <Route path="/auth" element={<AuthPage />} /> 
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/user-profile" element={<UserProfile />} />
-          <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
-          <Route path="/join" element={<JoinMeeting />} />
-          <Route path="/new-meeting" element={<NewMeeting />} />
-          <Route path="/room" element={<Room />} />
-          <Route path="/meetings" element={<MyMeetings />} />
-          <Route path="/recordings" element={<Recordings />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/team" element={<Team />} />
-        </Routes>
-      </div>
+      <AuthProvider>
+        <div className="app-main">
+          <Routes>
+            <Route path="/" element={<WelcomePage />} />
+            <Route path="/auth" element={<AuthPage />} /> 
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/user-profile" element={<UserProfile />} />
+            <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
+            <Route path="/join" element={<JoinMeeting />} />
+            <Route path="/new-meeting" element={<NewMeeting />} />
+            <Route path="/room" element={<Room />} />
+            <Route path="/meetings" element={<MyMeetings />} />
+            <Route path="/recordings" element={<Recordings />} />
+            <Route path="/history" element={<History />} />
+            <Route path="/team" element={<Team />} />
+          </Routes>
+        </div>
+      </AuthProvider>
     </Router>
   );
 }

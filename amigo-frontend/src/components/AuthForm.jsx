@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
+// 1. Remove useNavigate here, because AuthContext handles navigation (or we can keep it for safety)
+// But strictly following our previous Context code, the Context does the navigation.
+// However, sticking to your request to NOT damage code, I will use the logic cleanly.
+import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight, FaExclamationCircle } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext'; // 2. Import the Hook
 import './styles/AuthForm.css';
 
 const AuthForm = () => {
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Context handles navigation now
+  const { login, register } = useAuth(); // 3. Get functions from Context
   const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState(''); // 4. State for error messages
+  const [loading, setLoading] = useState(false); // 5. State for loading button
 
   // State to capture input values
   const [formData, setFormData] = useState({
@@ -19,27 +25,44 @@ const AuthForm = () => {
   // Handle Input Change
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError(''); // Clear error when user types
   };
 
   // Toggle Mode
   const toggleMode = () => {
     setIsLogin((prev) => !prev);
-    // Reset passwords to avoid confusion on switch
-    setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+    // Reset data to avoid confusion on switch
+    setFormData({ fullName: '', email: '', password: '', confirmPassword: '' });
+    setError('');
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setError('');
+    setLoading(true);
+
     if (isLogin) {
-      console.log("Logging in:", formData.email);
+      // --- LOGIN LOGIC ---
+      const result = await login(formData.email, formData.password);
+      if (!result.success) {
+        setError(result.error || "Login failed. Check credentials.");
+      }
     } else {
+      // --- REGISTER LOGIC ---
       if (formData.password !== formData.confirmPassword) {
-        alert("Passwords do not match!");
+        setError("Passwords do not match!");
+        setLoading(false);
         return;
       }
-      console.log("Registering:", formData.fullName);
+      
+      const result = await register(formData.fullName, formData.email, formData.password);
+      if (!result.success) {
+        setError(result.error || "Registration failed. Try again.");
+      }
     }
-    navigate('/dashboard');
+    
+    setLoading(false);
+    // Note: Navigation to /dashboard happens inside AuthContext on success
   };
 
   return (
@@ -53,6 +76,29 @@ const AuthForm = () => {
             : 'Join Amigo to start connecting with the world.'}
         </p>
       </div>
+
+      {/* NEW: Error Message Banner */}
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="error-banner"
+          style={{ 
+            background: 'rgba(239, 68, 68, 0.2)', 
+            border: '1px solid rgba(239, 68, 68, 0.5)',
+            color: '#fca5a5',
+            padding: '10px',
+            borderRadius: '8px',
+            marginBottom: '15px',
+            fontSize: '0.9rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <FaExclamationCircle /> {error}
+        </motion.div>
+      )}
 
       {/* Form Section */}
       <form onSubmit={handleSubmit} className="auth-form-container">
@@ -83,7 +129,7 @@ const AuthForm = () => {
           )}
         </AnimatePresence>
 
-        {/* 2. Email (Always Visible - Static to prevent duplication bugs) */}
+        {/* 2. Email (Always Visible) */}
         <div className="input-group">
           <FaEnvelope className="input-icon" />
           <input 
@@ -143,8 +189,9 @@ const AuthForm = () => {
         )}
 
         {/* Submit Button */}
-        <button type="submit" className="btn-submit-gradient">
-          {isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight style={{ marginLeft: '8px' }}/>
+        <button type="submit" className="btn-submit-gradient" disabled={loading}>
+          {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')} 
+          {!loading && <FaArrowRight style={{ marginLeft: '8px' }}/>}
         </button>
 
         {/* Divider */}
