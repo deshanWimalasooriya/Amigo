@@ -5,21 +5,28 @@ const bcrypt = require('bcryptjs');
  * @returns { Promise<void> } 
  */
 exports.seed = async function(knex) {
-  // 1. Deletes ALL existing entries first so we don't have duplicates
+  // 1. Deletes ALL existing entries first
   await knex('users').del();
   
-  // 2. Create a hashed password for the dummy user (using '123456')
+  // 2. Create a hashed password (using '123456')
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash('123456', salt);
 
-  // 3. Insert the dummy user
+  // 3. Insert the dummy user with NEW PROFILE FIELDS
   await knex('users').insert([
     {
       fullName: 'Demo User',
       email: 'demo@amigo.com',
-      password: hashedPassword, // We insert the hashed version
+      password: hashedPassword, 
       pmi: '394-201-992',
-      avatar: ''
+      avatar: '',
+      // New Fields we just added to the DB:
+      company: 'Amigo Tech',
+      jobTitle: 'Lead Developer',
+      bio: 'This is a generated demo account for testing purposes.',
+      phone: '+1 (555) 000-0000',
+      location: 'New York, USA',
+      timezone: '(GMT-05:00) Eastern Time'
     }
   ]);
 };

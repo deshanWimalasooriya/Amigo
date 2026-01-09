@@ -1,18 +1,24 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { FaBell, FaSearch, FaChevronDown } from 'react-icons/fa';
+import { FaBell, FaSearch, FaChevronDown, FaUserCircle, FaSignOutAlt } from 'react-icons/fa';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // 1. Import Auth
 import './styles/Header.css';
 import amigoLogo from '../assets/Amigo.png'; 
-import NotificationPanel from './NotificationPanel'; // 1. Import Panel
+import NotificationPanel from './NotificationPanel';
 
 const Header = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth(); // 2. Get User & Logout function
 
   // --- Notification State ---
   const [showNotifications, setShowNotifications] = useState(false);
-  const [notifCount, setNotifCount] = useState(3); // Start with 3 for demo
-  const panelRef = useRef(null); // To detect clicks outside
+  const [notifCount, setNotifCount] = useState(3);
+  const notifRef = useRef(null); // Ref for notification panel
+
+  // --- Profile Menu State ---
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileRef = useRef(null); // Ref for profile dropdown
 
   // Dummy Data
   const notifications = [
@@ -21,34 +27,44 @@ const Header = () => {
     { id: 3, type: 'alert', title: 'Server Maintenance', message: 'Scheduled for tonight at 2 AM', time: '5 hrs ago', unread: true },
   ];
 
-  // --- Click Outside Logic ---
+  // --- Click Outside Logic (Combined) ---
   useEffect(() => {
     const handleClickOutside = (event) => {
-      if (panelRef.current && !panelRef.current.contains(event.target)) {
-        // If panel is open and we click outside:
+      // Close Notification Panel if clicked outside
+      if (notifRef.current && !notifRef.current.contains(event.target)) {
         if (showNotifications) {
           setShowNotifications(false);
-          setNotifCount(0); // Reset count on close
+          setNotifCount(0);
         }
+      }
+      // Close Profile Menu if clicked outside
+      if (profileRef.current && !profileRef.current.contains(event.target)) {
+        setShowProfileMenu(false);
       }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showNotifications]);
+  }, [showNotifications, showProfileMenu]);
 
   // Toggle Handler
   const toggleNotifications = () => {
-    // If opening, keep count. If closing via toggle, reset count.
-    if (showNotifications) {
-        setNotifCount(0);
-    }
+    if (showNotifications) setNotifCount(0);
     setShowNotifications(!showNotifications);
+    setShowProfileMenu(false); // Close profile if opening notifs
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/');
   };
 
   const getNavClass = (path) => {
     return location.pathname === path ? 'nav-link active' : 'nav-link';
   };
+
+  // Safety: If user is not loaded yet, show placeholder or null
+  if (!user) return null; 
 
   return (
     <header className="app-header">
@@ -83,26 +99,49 @@ const Header = () => {
           <input type="text" placeholder="Search..." />
         </div>
 
-        {/* --- Notification Bell Wrapper (Position Relative needed for Popup) --- */}
-        <div className="notification-wrapper" ref={panelRef} style={{ position: 'relative' }}>
+        {/* --- Notification Bell --- */}
+        <div className="notification-wrapper" ref={notifRef} style={{ position: 'relative' }}>
             <button className="icon-btn" onClick={toggleNotifications}>
             <FaBell />
-            {/* Show dot only if count > 0 */}
             {notifCount > 0 && <span className="notification-dot">{notifCount}</span>}
             </button>
 
-            {/* The Popup Panel */}
             <NotificationPanel 
                 notifications={notifications} 
                 isOpen={showNotifications} 
             />
         </div>
 
-        {/* User Profile */}
-        <div className="user-profile-pill" onClick={() => navigate('/user-profile')}>
-          <div className="avatar-small">A</div>
-          <span className="username">Alex Sterling</span>
-          <FaChevronDown className="chevron-icon" />
+        {/* --- User Profile Dropdown --- */}
+        <div 
+          className="user-profile-wrapper" 
+          ref={profileRef}
+          style={{ position: 'relative' }} // Anchor for dropdown
+        >
+          <div 
+            className="user-profile-pill" 
+            onClick={() => setShowProfileMenu(!showProfileMenu)}
+          >
+            <div className="avatar-small">
+               {user.fullName.charAt(0).toUpperCase()}
+            </div>
+            {/* Dynamic Name */}
+            <span className="username">{user.fullName}</span> 
+            <FaChevronDown className={`chevron-icon ${showProfileMenu ? 'rotate' : ''}`} />
+          </div>
+
+          {/* The Dropdown Menu */}
+          {showProfileMenu && (
+            <div className="header-dropdown-menu">
+              <div className="dropdown-item" onClick={() => navigate('/user-profile')}>
+                <FaUserCircle /> Profile
+              </div>
+              <div className="dropdown-divider"></div>
+              <div className="dropdown-item logout" onClick={handleLogout}>
+                <FaSignOutAlt /> Log Out
+              </div>
+            </div>
+          )}
         </div>
 
       </div>

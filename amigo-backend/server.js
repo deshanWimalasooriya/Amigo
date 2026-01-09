@@ -46,6 +46,13 @@ io.on("connection", (socket) => {
     });
 });
 
+// --- ROUTES ---
+const authRoutes = require('./api/routes/authRoutes');
+const userRoutes = require('./api/routes/userRoutes');
+
+// Use Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 
 
 // --- DATABASE CONNECTION ---

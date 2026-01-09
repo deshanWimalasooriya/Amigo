@@ -12,16 +12,13 @@ module.exports = (sequelize, Sequelize) => {
     email: {
       type: Sequelize.STRING,
       allowNull: false,
-      unique: true, // No duplicate emails allowed
-      validate: {
-        isEmail: true
-      }
+      unique: true,
+      validate: { isEmail: true }
     },
     password: {
       type: Sequelize.STRING,
       allowNull: false
     },
-    // The Unique Personal Meeting ID (Instruction Followed)
     pmi: {
       type: Sequelize.STRING,
       unique: true,
@@ -29,8 +26,37 @@ module.exports = (sequelize, Sequelize) => {
     },
     avatar: {
       type: Sequelize.STRING,
-      defaultValue: "" // URL to image
+      defaultValue: ""
+    },
+    // --- NEW COLUMNS ---
+    company: {
+      type: Sequelize.STRING,
+      defaultValue: ""
+    },
+    jobTitle: {
+      type: Sequelize.STRING,
+      defaultValue: ""
+    },
+    bio: {
+      type: Sequelize.TEXT, // Use TEXT for long bio
+      defaultValue: ""
+    },
+    phone: {
+      type: Sequelize.STRING,
+      defaultValue: ""
+    },
+    location: {
+      type: Sequelize.STRING,
+      defaultValue: ""
+    },
+    timezone: {
+      type: Sequelize.STRING,
+      defaultValue: ""
     }
+  }, {
+    timestamps: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
   });
 
   return User;
