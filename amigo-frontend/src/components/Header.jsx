@@ -19,9 +19,9 @@ const Header = () => {
       {/* 2. Navigation (Center) */}
       <nav className="header-nav">
         <a href="#" className="nav-link active">Dashboard</a>
-        <a href="#" className="nav-link">My Meetings</a>
-        <a href="#" className="nav-link">Recordings</a>
-        <a href="#" className="nav-link">Team</a>
+        <a href="#" className="nav-link" onClick={() => navigate('/meetings')}>My Meetings</a>
+        <a href="#" className="nav-link" onClick={() => navigate('/recordings')}>Recordings</a>
+        <a href="#" className="nav-link" onClick={() => navigate('/team')}>Team</a>
       </nav>
 
       {/* 3. Actions & Profile (Right) */}
