@@ -2,7 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 
-
 // Importing Pages
 import Dashboard from './pages/Dashboard.jsx';
 import WelcomePage from './pages/WelcomePage';
@@ -31,7 +30,11 @@ function App() {
             <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
             <Route path="/join" element={<JoinMeeting />} />
             <Route path="/new-meeting" element={<NewMeeting />} />
-            <Route path="/room" element={<Room />} />
+            
+            {/* ⬇️ FIXED LINE: Added /:meetingId ⬇️ */}
+            <Route path="/room/:meetingId" element={<Room />} />
+            {/* ⬆️ Now it catches /room/123456 correctly ⬆️ */}
+
             <Route path="/meetings" element={<MyMeetings />} />
             <Route path="/recordings" element={<Recordings />} />
             <Route path="/history" element={<History />} />

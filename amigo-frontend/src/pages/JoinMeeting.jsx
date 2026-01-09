@@ -1,22 +1,64 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext'; // 1. Import Auth
 import { FaKeyboard, FaUser, FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, FaArrowRight } from 'react-icons/fa';
 import './styles/JoinMeeting.css';
 
 const JoinMeeting = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // 2. Get User Info
+  const videoRef = useRef(null); // Ref for video element
 
   // State
   const [formData, setFormData] = useState({
     meetingId: '',
-    username: 'Alex Sterling', // Pre-fill from profile usually
+    username: user?.fullName || 'Guest User', // Autofill Name
   });
 
   const [settings, setSettings] = useState({
     audio: true,
     video: true
   });
+
+  const [stream, setStream] = useState(null);
+
+  // 3. Access Real Camera (Tech Check)
+  useEffect(() => {
+    const getMedia = async () => {
+      try {
+        const currentStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        setStream(currentStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = currentStream;
+        }
+      } catch (err) {
+        console.error("Camera Access Error:", err);
+      }
+    };
+
+    getMedia();
+
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // 4. Toggle Tracks Live (So you see the effect immediately)
+  useEffect(() => {
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0];
+      const audioTrack = stream.getAudioTracks()[0];
+      
+      if (videoTrack) videoTrack.enabled = settings.video;
+      if (audioTrack) audioTrack.enabled = settings.audio;
+    }
+  }, [settings.video, settings.audio, stream]);
 
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -28,9 +70,16 @@ const JoinMeeting = () => {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    console.log("Joining Meeting:", formData, settings);
-    // Navigate to the actual video room (we will build this next)
-    navigate('/room'); 
+    if (!formData.meetingId) return;
+
+    // 5. Navigate to the Real Room
+    navigate(`/room/${formData.meetingId}`, { 
+        state: { 
+            micOn: settings.audio,
+            videoOn: settings.video,
+            userName: formData.username // Pass updated name if they changed it
+        } 
+    });
   };
 
   return (
@@ -61,6 +110,7 @@ const JoinMeeting = () => {
                   placeholder="e.g. 844-922-101" 
                   autoFocus
                   required
+                  autoComplete="off"
                 />
               </div>
             </div>
@@ -136,18 +186,20 @@ const JoinMeeting = () => {
           <div className="camera-card">
             {/* The Screen Area */}
             <div className={`video-screen ${!settings.video ? 'video-off' : ''}`}>
-              {settings.video ? (
-                <div className="fake-feed">
-                  <div className="face-sim"></div>
-                  <div className="mic-level-indicator">
-                    <div className={`bar ${settings.audio ? 'anim' : ''}`}></div>
-                    <div className={`bar ${settings.audio ? 'anim' : ''}`}></div>
-                    <div className={`bar ${settings.audio ? 'anim' : ''}`}></div>
-                  </div>
-                </div>
-              ) : (
+              
+              {/* REAL VIDEO FEED */}
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                muted 
+                playsInline
+                className={`real-video-preview ${!settings.video ? 'hidden' : ''}`}
+              />
+
+              {/* Avatar Fallback */}
+              {!settings.video && (
                 <div className="avatar-placeholder">
-                  {formData.username.charAt(0)}
+                  {formData.username.charAt(0).toUpperCase()}
                 </div>
               )}
 
@@ -163,7 +215,7 @@ const JoinMeeting = () => {
 
             <div className="camera-footer">
               <p>{settings.video ? "Camera is Ready" : "Camera is Off"}</p>
-              <button className="btn-test-device">Test Speaker and Microphone</button>
+              <button className="btn-test-device" type="button">Test Speaker and Microphone</button>
             </div>
           </div>
         </div>

@@ -25,7 +25,7 @@ app.use(cookieParser());
 // --- WEBRTC / SOCKET.IO SETUP ---
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:3000",
+        origin: "http://localhost:3000", // Make sure this matches your Frontend Port
         methods: ["GET", "POST"],
         credentials: true
     }
@@ -49,10 +49,16 @@ io.on("connection", (socket) => {
 // --- ROUTES ---
 const authRoutes = require('./api/routes/authRoutes');
 const userRoutes = require('./api/routes/userRoutes');
+const socketHandler = require('./sockets/socketHandler');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+
+
+
+// PASS THE 'io' OBJECT TO OUR HANDLER
+socketHandler(io);
 
 
 // --- DATABASE CONNECTION ---
