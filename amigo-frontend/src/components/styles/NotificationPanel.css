@@ -1,0 +1,137 @@
+.notification-panel {
+  position: absolute;
+  top: 60px; /* Positions it right below the bell */
+  right: -10px; /* Aligns slightly to the right of the bell */
+  width: 360px;
+  background: rgba(30, 41, 59, 0.95); /* Deep Blue/Slate */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 20px 50px -10px rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  overflow: hidden;
+  color: white;
+  transform-origin: top right;
+}
+
+/* Header */
+.notif-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.notif-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.mark-read {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.mark-read:hover { color: #6366f1; }
+
+/* List */
+.notif-list {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+.notif-item {
+  display: flex;
+  gap: 15px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+  transition: background 0.2s;
+  position: relative;
+}
+
+.notif-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.notif-item.unread {
+  background: rgba(99, 102, 241, 0.08); /* Slight Indigo Tint */
+}
+
+/* Icons */
+.notif-icon {
+  margin-top: 4px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.notif-icon-svg { font-size: 1.1rem; }
+.color-blue { color: #60a5fa; }
+.color-green { color: #4ade80; }
+.color-orange { color: #fbbf24; }
+.color-gray { color: #94a3b8; }
+
+/* Content */
+.notif-content { flex: 1; }
+
+.notif-title {
+  margin: 0 0 4px 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.notif-msg {
+  margin: 0 0 6px 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  line-height: 1.4;
+}
+
+.notif-time {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+/* Unread Dot inside Item */
+.unread-dot {
+  width: 8px;
+  height: 8px;
+  background: #6366f1;
+  border-radius: 50%;
+  margin-top: 8px;
+}
+
+/* Empty State */
+.empty-state {
+  padding: 40px;
+  text-align: center;
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+/* Footer */
+.notif-footer {
+  padding: 12px;
+  background: rgba(0, 0, 0, 0.2);
+  text-align: center;
+}
+
+.notif-footer button {
+  background: none;
+  border: none;
+  color: #818cf8;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+.notif-footer button:hover { text-decoration: underline; }
+
+/* Scrollbar Styling */
+.notif-list::-webkit-scrollbar { width: 6px; }
+.notif-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }

@@ -8,7 +8,7 @@
 .team-container {
   max-width: 1200px;
   margin: 0 auto;
-  padding-top: 110px; /* Fixed header offset */
+  padding-top: 2rem; /* Fixed header offset */
   padding-bottom: 3rem;
   padding-left: 2rem;
   padding-right: 2rem;

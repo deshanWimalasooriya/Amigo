@@ -3,6 +3,7 @@ import Header from '../components/Header'; // Import your new Header
 import { FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop, FaEllipsisH } from 'react-icons/fa';
 import './styles/Dashboard.css'; // Make sure this path matches your folder structure
 import { useNavigate } from 'react-router-dom'
+import Footer from '../components/Footer'; // Import your new Footer
 
 const Dashboard = () => {
 
@@ -134,6 +135,7 @@ const Dashboard = () => {
           </aside>
         </div>
       </main>
+      <Footer/>
     </div>
   );
 };
