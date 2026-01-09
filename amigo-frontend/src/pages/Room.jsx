@@ -5,7 +5,7 @@ import Peer from 'simple-peer';
 import { useAuth } from '../context/AuthContext';
 import { 
   FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash, 
-  FaPhoneSlash, FaComments, FaChevronRight, FaPaperPlane, FaExpand, FaCompress 
+  FaDesktop, FaPhoneSlash, FaComments, FaChevronRight, FaPaperPlane, FaExpand, FaCompress 
 } from 'react-icons/fa';
 import './styles/Room.css';
 
@@ -26,6 +26,8 @@ const Room = () => {
   // --- STATE ---
   const [micOn, setMicOn] = useState(state?.micOn ?? true);
   const [videoOn, setVideoOn] = useState(state?.videoOn ?? true);
+  // FIX: Added screenShare state back
+  const [screenShare, setScreenShare] = useState(false); 
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat'); 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -37,8 +39,6 @@ const Room = () => {
   const [callEnded, setCallEnded] = useState(false);
   const [callerName, setCallerName] = useState("");
   const [idToCall, setIdToCall] = useState(null);
-  
-  // 🚨 NEW: Call Queue State (Fixes the error)
   const [incomingCall, setIncomingCall] = useState(null);
 
   // Chat State
@@ -53,7 +53,6 @@ const Room = () => {
 
   // --- 1. INITIALIZE WEB RTC ---
   useEffect(() => {
-    // A. Get Local Media
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
         setStream(currentStream);
@@ -61,7 +60,6 @@ const Room = () => {
           myVideo.current.srcObject = currentStream;
         }
 
-        // B. Join Room (Only after we have a stream)
         socket.emit('join-room', { 
             roomId: meetingId, 
             userId: user?.id || 'guest', 
@@ -71,23 +69,16 @@ const Room = () => {
       .catch((err) => console.error("Media Error:", err));
 
     // --- SOCKET LISTENERS ---
-
-    // Host Logic: Detect new user
     socket.on('user-connected', ({ userName, socketId }) => {
         console.log("User Connected:", userName);
         setCallerName(userName);
         setIdToCall(socketId);
     });
 
-    // Guest Logic: Detect incoming call
     socket.on('call-made', ({ from, name, signal }) => {
         console.log("Call Received from:", name);
         setCallAccepted(true);
         setCallerName(name);
-        setOtherUserSocketId(from);
-        
-        // 🚨 FIX: Don't answer immediately. Store it.
-        // The new useEffect below will handle it when stream is ready.
         setIncomingCall({ callerId: from, signal });
     });
 
@@ -118,28 +109,37 @@ const Room = () => {
     };
   }, [meetingId, user]);
 
-  // --- 🚨 NEW: AUTO-ANSWER EFFECT ---
-  // This watches for both 'stream' AND 'incomingCall'. 
-  // It only runs when BOTH are ready.
+  // --- AUTO-ANSWER EFFECT ---
   useEffect(() => {
     if (incomingCall && stream && !connectionRef.current) {
-        console.log("Stream is ready. Answering call now...");
         answerCall(incomingCall.callerId, incomingCall.signal);
-        setIncomingCall(null); // Clear the queue
+        setIncomingCall(null);
     }
   }, [incomingCall, stream]);
 
-  // --- AUTO-CALL EFFECT (For Host) ---
+  // --- AUTO-CALL EFFECT ---
   useEffect(() => {
     if (idToCall && stream) {
-        console.log("Stream is ready. Calling user now...");
         callUser(idToCall);
-        setIdToCall(null); // Clear ID so we don't call twice
+        setIdToCall(null);
     }
   }, [idToCall, stream]);
 
-  // --- WEBRTC FUNCTIONS ---
+  // --- MEDIA TOGGLES ---
+  useEffect(() => {
+    if(stream) {
+        stream.getAudioTracks()[0].enabled = micOn;
+        const videoTrack = stream.getVideoTracks()[0];
+        // Only toggle video track if we are NOT screen sharing
+        // (If screen sharing, the track is different, handled by stopScreenShare)
+        if (videoTrack && !screenShare) {
+           videoTrack.enabled = videoOn;
+        }
+    }
+  }, [micOn, videoOn, stream, screenShare]);
 
+
+  // --- WEBRTC FUNCTIONS ---
   const callUser = (id) => {
     const peer = new Peer({
         initiator: true,
@@ -182,9 +182,51 @@ const Room = () => {
     connectionRef.current = peer;
   };
 
-  // --- UI HANDLERS ---
-  const [otherUserSocketId, setOtherUserSocketId] = useState(null);
+  // --- SCREEN SHARE FUNCTIONS ---
+  const handleScreenShare = () => {
+    if (!screenShare) {
+      navigator.mediaDevices
+        .getDisplayMedia({ cursor: true })
+        .then((screenStream) => {
+          setScreenShare(true);
+          const screenTrack = screenStream.getTracks()[0];
 
+          if (myVideo.current) {
+            myVideo.current.srcObject = screenStream;
+          }
+
+          if (connectionRef.current) {
+            const peer = connectionRef.current;
+            const sender = peer._pc.getSenders().find((s) => s.track.kind === 'video');
+            if (sender) sender.replaceTrack(screenTrack);
+          }
+
+          screenTrack.onended = () => {
+             stopScreenShare();
+          };
+        })
+        .catch((err) => console.log("Failed to get screen", err));
+    } else {
+      stopScreenShare();
+    }
+  };
+
+  const stopScreenShare = () => {
+      setScreenShare(false);
+      const videoTrack = stream.getVideoTracks()[0];
+      
+      if (myVideo.current) {
+          myVideo.current.srcObject = stream;
+      }
+
+      if (connectionRef.current) {
+          const peer = connectionRef.current;
+          const sender = peer._pc.getSenders().find((s) => s.track.kind === 'video');
+          if (sender) sender.replaceTrack(videoTrack);
+      }
+  };
+
+  // --- UI HANDLERS ---
   const handleSendMessage = (e) => {
     e.preventDefault();
     if (!newMessage.trim()) return;
@@ -221,14 +263,6 @@ const Room = () => {
     }
   };
 
-  // Toggles
-  useEffect(() => {
-    if(stream) {
-        stream.getAudioTracks()[0].enabled = micOn;
-        stream.getVideoTracks()[0].enabled = videoOn;
-    }
-  }, [micOn, videoOn, stream]);
-
   return (
     <div className="room-container">
       
@@ -253,8 +287,15 @@ const Room = () => {
             {/* Local Video */}
             <div className="video-tile local-tile">
                  <div className="video-feed-sim">
-                    <video playsInline muted ref={myVideo} autoPlay className="video-element mirror" />
-                    <span className="participant-label">You</span>
+                    {/* Remove mirror class if sharing screen so text is readable */}
+                    <video 
+                        playsInline 
+                        muted 
+                        ref={myVideo} 
+                        autoPlay 
+                        className={`video-element ${screenShare ? '' : 'mirror'}`} 
+                    />
+                    <span className="participant-label">You {screenShare && '(Presenting)'}</span>
                  </div>
             </div>
 
@@ -287,15 +328,24 @@ const Room = () => {
             {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
             <span>{micOn ? 'Mute' : 'Unmute'}</span>
           </button>
+          
           <button className={`dock-btn ${!videoOn ? 'danger' : ''}`} onClick={() => setVideoOn(!videoOn)}>
             {videoOn ? <FaVideo /> : <FaVideoSlash />}
             <span>{videoOn ? 'Stop Video' : 'Start Video'}</span>
           </button>
+
+          {/* SCREEN SHARE BUTTON */}
+          <button className={`dock-btn ${screenShare ? 'active' : ''}`} onClick={handleScreenShare}>
+            <FaDesktop />
+            <span>{screenShare ? 'Stop Share' : 'Share'}</span>
+          </button>
+
           <button className={`dock-btn ${sidePanelOpen && activeTab === 'chat' ? 'active' : ''}`} onClick={() => {setActiveTab('chat'); setSidePanelOpen(!sidePanelOpen)}}>
             <FaComments />
             <span>Chat</span>
           </button>
         </div>
+        
         <div className="dock-group right">
           <button className="dock-btn end-call" onClick={handleEndCall}>
             <FaPhoneSlash />
