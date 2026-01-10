@@ -6,9 +6,8 @@ module.exports = (io) => {
         socket.on("join-room", ({ roomId, userId, userName }) => {
             socket.join(roomId);
             console.log(`User ${userName} joined Room: ${roomId}`);
-
-            // Broadcast to everyone ELSE: "Hey, User X joined!"
-            // We pass the socketId so the host can call this specific person
+            
+            // Tell everyone else (the Host) that I am here
             socket.to(roomId).emit("user-connected", { 
                 userId, 
                 userName, 
@@ -16,7 +15,7 @@ module.exports = (io) => {
             });
         });
 
-        // 2. Relay Call (Offer)
+        // 2. Call User (Host calling Guest)
         socket.on("call-user", ({ userToCall, signalData, from, name }) => {
             io.to(userToCall).emit("call-made", { 
                 signal: signalData, 
@@ -25,7 +24,7 @@ module.exports = (io) => {
             });
         });
 
-        // 3. Relay Answer (Answer)
+        // 3. Answer Call (Guest answering Host)
         socket.on("answer-call", ({ signal, to }) => {
             io.to(to).emit("call-answered", { signal, answeredBy: socket.id });
         });
