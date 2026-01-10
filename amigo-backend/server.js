@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http'); 
+const http = require('http'); // Native Node module
 const { Server } = require("socket.io");
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
@@ -8,70 +8,40 @@ const db = require("./api/models");
 
 // Initialize App
 const app = express();
-const server = http.createServer(app); 
+const server = http.createServer(app); // Wrap Express in HTTP server for WebRTC
 
 // --- MIDDLEWARE ---
+// 1. CORS: Allow your React Frontend to talk to this Backend
 app.use(cors({
-    origin: "http://localhost:3000", // Frontend URL
-    credentials: true,
+    origin: "http://localhost:3000", // Your Frontend URL
+    credentials: true, // Allow Cookies to be sent/received
     methods: ["GET", "POST", "PUT", "DELETE"]
 }));
 
+// 2. Parsers: Understand JSON and Cookies
 app.use(express.json());
 app.use(cookieParser());
 
-// --- SOCKET.IO SETUP ---
+// --- WEBRTC / SOCKET.IO SETUP ---
 const io = new Server(server, {
     cors: {
-        origin: "http://localhost:3000", // Match Frontend Port
+        origin: "http://localhost:3000", // Make sure this matches your Frontend Port
         methods: ["GET", "POST"],
         credentials: true
     }
 });
 
-// Basic Test Route
+// Basic Test Route (To check if server is alive)
 app.get('/', (req, res) => {
     res.send("✅ Amigo Backend Server is Running!");
 });
 
-// --- CRITICAL WEBRTC SOCKET LOGIC ---
-// I have moved the logic here to ensure it works without conflicts
+// --- SOCKET CONNECTION LOOP ---
 io.on("connection", (socket) => {
-    console.log(`⚡ New Connection: ${socket.id}`);
+    console.log(`⚡ New Real-Time Connection: ${socket.id}`);
 
-    // 1. Join Room
-    socket.on("join-room", ({ roomId, userId, userName }) => {
-        socket.join(roomId);
-        // Broadcast to everyone ELSE in the room that a user joined
-        socket.to(roomId).emit("user-connected", { 
-            userName, 
-            socketId: socket.id 
-        });
-    });
-
-    // 2. Call User (One-to-One Signal)
-    // Important: We send this ONLY to the specific userToCall, not everyone
-    socket.on("call-user", ({ userToCall, signalData, from, name }) => {
-        io.to(userToCall).emit("call-made", { 
-            signal: signalData, 
-            from, 
-            name 
-        });
-    });
-
-    // 3. Answer Call (One-to-One Signal)
-    socket.on("answer-call", ({ signal, to }) => {
-        io.to(to).emit("call-answered", { signal, answeredBy: socket.id });
-    });
-
-    // 4. Chat Messages
-    socket.on("send-message", ({ roomId, message, userName, time }) => {
-        socket.to(roomId).emit("receive-message", { message, userName, time });
-    });
-
-    // 5. Disconnect
+    // We will add WebRTC logic here later
     socket.on("disconnect", () => {
-        socket.broadcast.emit("user-disconnected", socket.id);
         console.log(`❌ User Disconnected: ${socket.id}`);
     });
 });
@@ -79,6 +49,7 @@ io.on("connection", (socket) => {
 // --- ROUTES ---
 const authRoutes = require('./api/routes/authRoutes');
 const userRoutes = require('./api/routes/userRoutes');
+const socketHandler = require('./sockets/socketHandler');
 const meetingRoutes = require('./api/routes/meetingRoutes');
 
 // Use Routes
@@ -86,10 +57,19 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meetings', meetingRoutes);
 
-// NOTE: I removed the 'socketHandler(io)' lines because 
-// we are now handling sockets directly above to prevent duplicate signals.
+
+
+// PASS THE 'io' OBJECT TO OUR HANDLER
+socketHandler(io);
+
+
+
+// PASS THE 'io' OBJECT TO OUR HANDLER
+socketHandler(io);
+
 
 // --- DATABASE CONNECTION ---
+// sync() will create tables if they don't exist
 db.sequelize.sync()
   .then(() => {
     console.log("✅ Synced database successfully.");

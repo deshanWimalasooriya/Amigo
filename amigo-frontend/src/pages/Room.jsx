@@ -10,7 +10,7 @@ import {
 import './styles/Room.css';
 
 // Initialize Socket
-// NOTE: Ensure this matches your backend URL exactly
+// CHANGE THIS: Use your Wi-Fi IP if testing on LAN (e.g., http://192.168.1.15:5000)
 const socket = io('http://localhost:5000'); 
 
 const Room = () => {
@@ -25,7 +25,6 @@ const Room = () => {
   const connectionRef = useRef();
   const streamRef = useRef();   
   const callMade = useRef(false); 
-  const lastMessageRef = useRef(null);
 
   // --- STATE ---
   const [micOn, setMicOn] = useState(state?.micOn ?? true);
@@ -101,14 +100,21 @@ const Room = () => {
         setCallAccepted(true);
         const peer = connectionRef.current;
         
+        // 1. Check if peer exists
         if (!peer || peer.destroyed) return;
 
-        // Try to signal
+        // 2. Check internal state. If 'stable', we are ALREADY connected.
+        // STOP here to prevent the crash.
+        if (peer._pc && peer._pc.signalingState === 'stable') {
+            console.log("⚠️ Connection already stable. Ignoring duplicate answer signal.");
+            return; 
+        }
+
+        // 3. Try to signal, catch any other errors silently
         try {
             peer.signal(signal); 
         } catch (err) {
-            // We also catch sync errors here
-            console.warn("Peer signal handled safely (Sync):", err.message);
+            console.warn("Peer signal handled safely:", err.message);
         }
     });
 
@@ -120,38 +126,20 @@ const Room = () => {
         if(connectionRef.current) connectionRef.current.destroy();
     });
 
+    socket.on('receive-message', ({ message, userName, time }) => {
+        setMessages((prev) => [...prev, { user: userName, text: message, time: time }]);
+    });
+
     return () => {
         socket.off('user-connected');
         socket.off('call-made');
         socket.off('call-answered');
         socket.off('user-disconnected');
+        socket.off('receive-message');
     };
   }, [meetingId, user]);
 
-  // --- 2. CHAT LISTENER ---
-  useEffect(() => {
-    const handleReceiveMessage = ({ message, userName, time }) => {
-        const uniqueKey = `${userName}-${message}-${time}`;
-        if (lastMessageRef.current === uniqueKey) return; 
-
-        lastMessageRef.current = uniqueKey;
-        setMessages((prev) => [...prev, { user: userName, text: message, time: time }]);
-    };
-
-    socket.on('receive-message', handleReceiveMessage);
-    return () => {
-        socket.off('receive-message', handleReceiveMessage);
-    };
-  }, []); 
-
   // --- REMOTE VIDEO ATTACHER ---
-  useEffect(() => {
-    if (userVideo.current && remoteStream) {
-        userVideo.current.srcObject = remoteStream;
-    }
-  }, [remoteStream, callAccepted]); 
-
-  // --- AUTO-ANSWER ---
   useEffect(() => {
     if (userVideo.current && remoteStream) {
         userVideo.current.srcObject = remoteStream;
@@ -164,11 +152,11 @@ const Room = () => {
         answerCall(incomingCall.callerId, incomingCall.signal);
         setIncomingCall(null);
     }
-  }, [incomingCall, stream]); 
+  }, [incomingCall]); 
 
   // --- AUTO-CALL ---
   useEffect(() => {
-    if (idToCall && stream && !callMade.current) {
+    if (idToCall && streamRef.current && !callMade.current) {
         callUser(idToCall);
         callMade.current = true;
         setIdToCall(null);
@@ -187,7 +175,7 @@ const Room = () => {
   }, [micOn, videoOn, stream, screenShare]);
 
 
-  // --- WEBRTC FUNCTIONS (THE FIX IS HERE) ---
+  // --- WEBRTC FUNCTIONS ---
   
   const callUser = (id) => {
     const peer = new Peer({
@@ -209,13 +197,8 @@ const Room = () => {
         setRemoteStream(currentRemoteStream);
     });
 
-    // FIX: Explicit Error Listener to prevent "Uncaught" crashes
     peer.on('error', (err) => {
-        console.log("Peer Connection Error:", err.message);
-        // If error is "stable", we just ignore it.
-        if (err.code === 'ERR_WEBRTC_SUPPORT' || err.message.includes('stable')) {
-            return;
-        }
+        console.error("Peer connection error:", err);
     });
 
     connectionRef.current = peer;
@@ -236,12 +219,8 @@ const Room = () => {
         setRemoteStream(currentRemoteStream);
     });
 
-    // FIX: Explicit Error Listener for the Answerer side too
     peer.on('error', (err) => {
-        console.log("Peer Connection Error (Answer):", err.message);
-        if (err.code === 'ERR_WEBRTC_SUPPORT' || err.message.includes('stable')) {
-            return;
-        }
+        console.error("Peer connection error:", err);
     });
 
     try {
@@ -277,8 +256,9 @@ const Room = () => {
         })
         .catch((err) => {
             console.log("Failed to get screen", err);
+            // Handle permission denied or cancel
             if (err.name === 'NotAllowedError') {
-                 alert("Screen share permission denied.");
+                 alert("Screen share cancelled or permission denied.");
             }
         });
     } else {
@@ -316,11 +296,7 @@ const Room = () => {
     };
 
     socket.emit('send-message', msgData);
-    
-    const uniqueKey = `${user?.fullName || 'Guest'}-${newMessage}-${msgData.time}`;
-    lastMessageRef.current = uniqueKey; 
     setMessages((prev) => [...prev, { user: 'You', text: newMessage, time: msgData.time }]);
-    
     setNewMessage("");
   };
 
