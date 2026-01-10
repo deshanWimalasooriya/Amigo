@@ -10,6 +10,7 @@ import {
 import './styles/Room.css';
 
 // Initialize Socket
+// CHANGE THIS: Use your Wi-Fi IP if testing on LAN (e.g., http://192.168.1.15:5000)
 const socket = io('http://localhost:5000'); 
 
 const Room = () => {
@@ -22,11 +23,12 @@ const Room = () => {
   const myVideo = useRef();
   const userVideo = useRef();
   const connectionRef = useRef();
+  const streamRef = useRef();   
+  const callMade = useRef(false); 
 
   // --- STATE ---
   const [micOn, setMicOn] = useState(state?.micOn ?? true);
   const [videoOn, setVideoOn] = useState(state?.videoOn ?? true);
-  // FIX: Added screenShare state back
   const [screenShare, setScreenShare] = useState(false); 
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('chat'); 
@@ -34,7 +36,8 @@ const Room = () => {
   const [time, setTime] = useState(new Date());
 
   // WebRTC State
-  const [stream, setStream] = useState(null);
+  const [stream, setStream] = useState(null); 
+  const [remoteStream, setRemoteStream] = useState(null); 
   const [callAccepted, setCallAccepted] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const [callerName, setCallerName] = useState("");
@@ -51,11 +54,13 @@ const Room = () => {
     return () => clearInterval(timer);
   }, []);
 
-  // --- 1. INITIALIZE WEB RTC ---
+  // --- 1. INITIALIZE MEDIA & SOCKET ---
   useEffect(() => {
     navigator.mediaDevices.getUserMedia({ video: true, audio: true })
       .then((currentStream) => {
         setStream(currentStream);
+        streamRef.current = currentStream; 
+        
         if (myVideo.current) {
           myVideo.current.srcObject = currentStream;
         }
@@ -69,10 +74,18 @@ const Room = () => {
       .catch((err) => console.error("Media Error:", err));
 
     // --- SOCKET LISTENERS ---
+    
     socket.on('user-connected', ({ userName, socketId }) => {
         console.log("User Connected:", userName);
         setCallerName(userName);
-        setIdToCall(socketId);
+        
+        // Host calls automatically if stream is ready
+        if (streamRef.current && !callMade.current) {
+             callUser(socketId);
+             callMade.current = true;
+        } else {
+             setIdToCall(socketId);
+        }
     });
 
     socket.on('call-made', ({ from, name, signal }) => {
@@ -82,18 +95,35 @@ const Room = () => {
         setIncomingCall({ callerId: from, signal });
     });
 
+    // --- CRITICAL FIX FOR INVALID STATE ERROR ---
     socket.on('call-answered', ({ signal }) => {
         setCallAccepted(true);
-        if(connectionRef.current) {
-            connectionRef.current.signal(signal);
+        const peer = connectionRef.current;
+        
+        // 1. Check if peer exists
+        if (!peer || peer.destroyed) return;
+
+        // 2. Check internal state. If 'stable', we are ALREADY connected.
+        // STOP here to prevent the crash.
+        if (peer._pc && peer._pc.signalingState === 'stable') {
+            console.log("⚠️ Connection already stable. Ignoring duplicate answer signal.");
+            return; 
+        }
+
+        // 3. Try to signal, catch any other errors silently
+        try {
+            peer.signal(signal); 
+        } catch (err) {
+            console.warn("Peer signal handled safely:", err.message);
         }
     });
 
     socket.on('user-disconnected', () => {
         setCallEnded(true);
         setCallAccepted(false);
+        callMade.current = false;
+        setRemoteStream(null); 
         if(connectionRef.current) connectionRef.current.destroy();
-        window.location.reload(); 
     });
 
     socket.on('receive-message', ({ message, userName, time }) => {
@@ -109,29 +139,35 @@ const Room = () => {
     };
   }, [meetingId, user]);
 
-  // --- AUTO-ANSWER EFFECT ---
+  // --- REMOTE VIDEO ATTACHER ---
   useEffect(() => {
-    if (incomingCall && stream && !connectionRef.current) {
+    if (userVideo.current && remoteStream) {
+        userVideo.current.srcObject = remoteStream;
+    }
+  }, [remoteStream, callAccepted]); 
+
+  // --- AUTO-ANSWER ---
+  useEffect(() => {
+    if (incomingCall && streamRef.current && !connectionRef.current) {
         answerCall(incomingCall.callerId, incomingCall.signal);
         setIncomingCall(null);
     }
-  }, [incomingCall, stream]);
+  }, [incomingCall]); 
 
-  // --- AUTO-CALL EFFECT ---
+  // --- AUTO-CALL ---
   useEffect(() => {
-    if (idToCall && stream) {
+    if (idToCall && streamRef.current && !callMade.current) {
         callUser(idToCall);
+        callMade.current = true;
         setIdToCall(null);
     }
-  }, [idToCall, stream]);
+  }, [idToCall]);
 
   // --- MEDIA TOGGLES ---
   useEffect(() => {
     if(stream) {
         stream.getAudioTracks()[0].enabled = micOn;
         const videoTrack = stream.getVideoTracks()[0];
-        // Only toggle video track if we are NOT screen sharing
-        // (If screen sharing, the track is different, handled by stopScreenShare)
         if (videoTrack && !screenShare) {
            videoTrack.enabled = videoOn;
         }
@@ -140,11 +176,12 @@ const Room = () => {
 
 
   // --- WEBRTC FUNCTIONS ---
+  
   const callUser = (id) => {
     const peer = new Peer({
         initiator: true,
         trickle: false,
-        stream: stream
+        stream: streamRef.current
     });
 
     peer.on('signal', (data) => {
@@ -156,8 +193,12 @@ const Room = () => {
         });
     });
 
-    peer.on('stream', (remoteStream) => {
-        if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    peer.on('stream', (currentRemoteStream) => {
+        setRemoteStream(currentRemoteStream);
+    });
+
+    peer.on('error', (err) => {
+        console.error("Peer connection error:", err);
     });
 
     connectionRef.current = peer;
@@ -167,22 +208,31 @@ const Room = () => {
     const peer = new Peer({
         initiator: false,
         trickle: false,
-        stream: stream
+        stream: streamRef.current
     });
 
     peer.on('signal', (data) => {
         socket.emit('answer-call', { signal: data, to: callerId });
     });
 
-    peer.on('stream', (remoteStream) => {
-        if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    peer.on('stream', (currentRemoteStream) => {
+        setRemoteStream(currentRemoteStream);
     });
 
-    peer.signal(signal);
+    peer.on('error', (err) => {
+        console.error("Peer connection error:", err);
+    });
+
+    try {
+        peer.signal(signal);
+    } catch(err) {
+        console.warn("Signal error in answer:", err);
+    }
+    
     connectionRef.current = peer;
   };
 
-  // --- SCREEN SHARE FUNCTIONS ---
+  // --- SCREEN SHARE ---
   const handleScreenShare = () => {
     if (!screenShare) {
       navigator.mediaDevices
@@ -195,9 +245,8 @@ const Room = () => {
             myVideo.current.srcObject = screenStream;
           }
 
-          if (connectionRef.current) {
-            const peer = connectionRef.current;
-            const sender = peer._pc.getSenders().find((s) => s.track.kind === 'video');
+          if (connectionRef.current && connectionRef.current._pc) {
+            const sender = connectionRef.current._pc.getSenders().find((s) => s.track.kind === 'video');
             if (sender) sender.replaceTrack(screenTrack);
           }
 
@@ -205,58 +254,32 @@ const Room = () => {
              stopScreenShare();
           };
         })
-        .catch((err) => console.log("Failed to get screen", err));
+        .catch((err) => {
+            console.log("Failed to get screen", err);
+            // Handle permission denied or cancel
+            if (err.name === 'NotAllowedError') {
+                 alert("Screen share cancelled or permission denied.");
+            }
+        });
     } else {
       stopScreenShare();
     }
-  }, [incomingCall, stream]);
-
-  // --- AUTO-CALL EFFECT (For Host) ---
-  useEffect(() => {
-    if (idToCall && stream) {
-        console.log("Stream is ready. Calling user now...");
-        callUser(idToCall);
-        setIdToCall(null); // Clear ID so we don't call twice
-    }
-  }, [idToCall, stream]);
-
-  // --- WEBRTC FUNCTIONS ---
-
-  const callUser = (id) => {
-    const peer = new Peer({
-        initiator: true,
-        trickle: false,
-        stream: stream
-    });
-
-    peer.on('signal', (data) => {
-        socket.emit('call-user', {
-            userToCall: id,
-            signalData: data,
-            from: socket.id,
-            name: user?.fullName
-        });
-    });
-
-    peer.on('stream', (remoteStream) => {
-        if (userVideo.current) userVideo.current.srcObject = remoteStream;
-    });
-
-    connectionRef.current = peer;
   };
 
   const stopScreenShare = () => {
       setScreenShare(false);
-      const videoTrack = stream.getVideoTracks()[0];
-      
-      if (myVideo.current) {
-          myVideo.current.srcObject = stream;
-      }
+      const currentStream = streamRef.current;
+      if (currentStream) {
+          const videoTrack = currentStream.getVideoTracks()[0];
+          
+          if (myVideo.current) {
+              myVideo.current.srcObject = currentStream;
+          }
 
-      if (connectionRef.current) {
-          const peer = connectionRef.current;
-          const sender = peer._pc.getSenders().find((s) => s.track.kind === 'video');
-          if (sender) sender.replaceTrack(videoTrack);
+          if (connectionRef.current && connectionRef.current._pc) {
+              const sender = connectionRef.current._pc.getSenders().find((s) => s.track.kind === 'video');
+              if (sender) sender.replaceTrack(videoTrack);
+          }
       }
   };
 
@@ -280,7 +303,13 @@ const Room = () => {
   const handleEndCall = () => {
     if(connectionRef.current) connectionRef.current.destroy();
     setCallEnded(true);
-    if(stream) stream.getTracks().forEach(track => track.stop());
+    callMade.current = false;
+    setRemoteStream(null);
+    
+    if(streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
     navigate('/dashboard');
     window.location.reload(); 
   };
@@ -297,18 +326,8 @@ const Room = () => {
     }
   };
 
-  // Toggles
-  useEffect(() => {
-    if(stream) {
-        stream.getAudioTracks()[0].enabled = micOn;
-        stream.getVideoTracks()[0].enabled = videoOn;
-    }
-  }, [micOn, videoOn, stream]);
-
   return (
     <div className="room-container">
-      
-      {/* Header */}
       <header className="room-header">
         <div className="meeting-info">
           <span className="secure-badge"><FaVideo /> Secure</span>
@@ -322,14 +341,12 @@ const Room = () => {
         </div>
       </header>
 
-      {/* Main Stage */}
       <main className={`main-stage ${sidePanelOpen ? 'shrink' : ''}`}>
         <div className="video-grid">
             
             {/* Local Video */}
             <div className="video-tile local-tile">
                  <div className="video-feed-sim">
-                    {/* Remove mirror class if sharing screen so text is readable */}
                     <video 
                         playsInline 
                         muted 
@@ -345,7 +362,12 @@ const Room = () => {
             {callAccepted && !callEnded ? (
                 <div className="video-tile remote-tile">
                     <div className="video-feed-sim">
-                        <video playsInline ref={userVideo} autoPlay className="video-element" />
+                        <video 
+                            playsInline 
+                            ref={userVideo} 
+                            autoPlay 
+                            className="video-element" 
+                        />
                         <span className="participant-label">{callerName || "Remote User"}</span>
                     </div>
                 </div>
@@ -363,7 +385,7 @@ const Room = () => {
         </div>
       </main>
 
-      {/* Control Dock */}
+      {/* Controls & Chat */}
       <div className="control-dock">
         <div className="dock-group center">
           <button className={`dock-btn ${!micOn ? 'danger' : ''}`} onClick={() => setMicOn(!micOn)}>
@@ -376,7 +398,6 @@ const Room = () => {
             <span>{videoOn ? 'Stop Video' : 'Start Video'}</span>
           </button>
 
-          {/* SCREEN SHARE BUTTON */}
           <button className={`dock-btn ${screenShare ? 'active' : ''}`} onClick={handleScreenShare}>
             <FaDesktop />
             <span>{screenShare ? 'Stop Share' : 'Share'}</span>
@@ -396,7 +417,6 @@ const Room = () => {
         </div>
       </div>
 
-      {/* Side Panel */}
       <aside className={`side-panel ${sidePanelOpen ? 'open' : ''}`}>
         <div className="panel-header">
           <h3>Chat</h3>
@@ -430,7 +450,6 @@ const Room = () => {
           </div>
         )}
       </aside>
-
     </div>
   );
 };
