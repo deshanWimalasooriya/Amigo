@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
 import Header from '../components/Header';
 import { useNavigate } from 'react-router-dom';
-import api from '../api/axios'; // 1. Import your API connection
-import { FaCalendarAlt, FaClock, FaHeading, FaLock, FaVideo, FaCopy } from 'react-icons/fa';
+import { FaCalendarAlt, FaClock, FaHeading, FaLock, FaVideo, FaTimes, FaCheck, FaCopy } from 'react-icons/fa';
 import './styles/ScheduleMeeting.css';
 
 const ScheduleMeeting = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false); // 2. Loading state to prevent double-clicks
   
   // State for form data
   const [formData, setFormData] = useState({
@@ -25,24 +23,10 @@ const ScheduleMeeting = () => {
     setFormData({ ...formData, [e.target.name]: value });
   };
 
-  // 3. The Real Backend Connection
-  const handleSchedule = async (e) => {
+  const handleSchedule = (e) => {
     e.preventDefault();
-    setLoading(true);
-
-    try {
-      // This sends the data to your new POST /api/meetings endpoint
-      const response = await api.post('/meetings', formData);
-      
-      console.log("Meeting Created:", response.data);
-      alert("Success! Meeting has been scheduled.");
-      navigate('/dashboard'); // Redirect to dashboard
-    } catch (err) {
-      console.error("Schedule Error:", err);
-      alert("Failed to schedule meeting. Please check your connection.");
-    } finally {
-      setLoading(false);
-    }
+    console.log("Meeting Scheduled:", formData);
+    navigate('/dashboard'); // Go back to dashboard after saving
   };
 
   return (
@@ -72,7 +56,6 @@ const ScheduleMeeting = () => {
                   value={formData.topic} 
                   onChange={handleChange} 
                   placeholder="Enter meeting topic" 
-                  required
                 />
               </div>
             </div>
@@ -87,7 +70,6 @@ const ScheduleMeeting = () => {
                     name="date" 
                     value={formData.date} 
                     onChange={handleChange} 
-                    required
                   />
                 </div>
               </div>
@@ -100,7 +82,6 @@ const ScheduleMeeting = () => {
                     name="time" 
                     value={formData.time} 
                     onChange={handleChange} 
-                    required
                   />
                 </div>
               </div>
@@ -173,9 +154,7 @@ const ScheduleMeeting = () => {
             {/* Actions */}
             <div className="form-actions">
               <button type="button" className="btn-cancel" onClick={() => navigate('/dashboard')}>Cancel</button>
-              <button type="submit" className="btn-save" disabled={loading}>
-                {loading ? "Scheduling..." : "Schedule"}
-              </button>
+              <button type="submit" className="btn-save">Schedule</button>
             </div>
 
           </form>
