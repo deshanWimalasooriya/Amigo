@@ -209,6 +209,40 @@ const Room = () => {
     } else {
       stopScreenShare();
     }
+  }, [incomingCall, stream]);
+
+  // --- AUTO-CALL EFFECT (For Host) ---
+  useEffect(() => {
+    if (idToCall && stream) {
+        console.log("Stream is ready. Calling user now...");
+        callUser(idToCall);
+        setIdToCall(null); // Clear ID so we don't call twice
+    }
+  }, [idToCall, stream]);
+
+  // --- WEBRTC FUNCTIONS ---
+
+  const callUser = (id) => {
+    const peer = new Peer({
+        initiator: true,
+        trickle: false,
+        stream: stream
+    });
+
+    peer.on('signal', (data) => {
+        socket.emit('call-user', {
+            userToCall: id,
+            signalData: data,
+            from: socket.id,
+            name: user?.fullName
+        });
+    });
+
+    peer.on('stream', (remoteStream) => {
+        if (userVideo.current) userVideo.current.srcObject = remoteStream;
+    });
+
+    connectionRef.current = peer;
   };
 
   const stopScreenShare = () => {
@@ -262,6 +296,14 @@ const Room = () => {
       }
     }
   };
+
+  // Toggles
+  useEffect(() => {
+    if(stream) {
+        stream.getAudioTracks()[0].enabled = micOn;
+        stream.getVideoTracks()[0].enabled = videoOn;
+    }
+  }, [micOn, videoOn, stream]);
 
   return (
     <div className="room-container">

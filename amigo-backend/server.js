@@ -63,6 +63,11 @@ app.use('/api/meetings', meetingRoutes);
 socketHandler(io);
 
 
+
+// PASS THE 'io' OBJECT TO OUR HANDLER
+socketHandler(io);
+
+
 // --- DATABASE CONNECTION ---
 // sync() will create tables if they don't exist
 db.sequelize.sync()
