@@ -96,6 +96,7 @@ const Room = () => {
         setIncomingCall({ callerId: from, signal });
     });
 
+    // --- CRITICAL FIX FOR INVALID STATE ERROR ---
     socket.on('call-answered', ({ signal }) => {
         setCallAccepted(true);
         const peer = connectionRef.current;
@@ -152,7 +153,14 @@ const Room = () => {
 
   // --- AUTO-ANSWER ---
   useEffect(() => {
-    if (incomingCall && stream && !connectionRef.current) {
+    if (userVideo.current && remoteStream) {
+        userVideo.current.srcObject = remoteStream;
+    }
+  }, [remoteStream, callAccepted]); 
+
+  // --- AUTO-ANSWER ---
+  useEffect(() => {
+    if (incomingCall && streamRef.current && !connectionRef.current) {
         answerCall(incomingCall.callerId, incomingCall.signal);
         setIncomingCall(null);
     }
@@ -165,7 +173,7 @@ const Room = () => {
         callMade.current = true;
         setIdToCall(null);
     }
-  }, [idToCall, stream]);
+  }, [idToCall]);
 
   // --- MEDIA TOGGLES ---
   useEffect(() => {
