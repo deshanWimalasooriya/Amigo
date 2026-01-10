@@ -50,10 +50,17 @@ io.on("connection", (socket) => {
 const authRoutes = require('./api/routes/authRoutes');
 const userRoutes = require('./api/routes/userRoutes');
 const socketHandler = require('./sockets/socketHandler');
+const meetingRoutes = require('./api/routes/meetingRoutes');
 
 // Use Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/meetings', meetingRoutes);
+
+
+
+// PASS THE 'io' OBJECT TO OUR HANDLER
+socketHandler(io);
 
 
 
