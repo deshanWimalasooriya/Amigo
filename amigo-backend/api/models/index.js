@@ -1,29 +1,35 @@
-const dbConfig = require("../config/db.config.js");
+const dbConfig = require('../config/db.config.js');
 const Sequelize = require("sequelize");
 
-// 1. Initialize the Connection
+// 1. Initialize the Connection FIRST
 const sequelize = new Sequelize(dbConfig.DB, dbConfig.USER, dbConfig.PASSWORD, {
   host: dbConfig.HOST,
   dialect: dbConfig.dialect,
-  operatorsAliases: 0, // Hide warnings
+  operatorsAliases: 0,
   pool: {
     max: dbConfig.pool.max,
     min: dbConfig.pool.min,
     acquire: dbConfig.pool.acquire,
     idle: dbConfig.pool.idle
   },
-  logging: false // Set to true if you want to see raw SQL queries in terminal
+  logging: false 
 });
 
+// 2. Initialize the db object NEXT
 const db = {};
 
 db.Sequelize = Sequelize;
 db.sequelize = sequelize;
 
-// Load the User Model
+// 3. Load Models AFTER db and sequelize exist
 db.users = require("./User.js")(sequelize, Sequelize);
+db.meetings = require("./Meeting.js")(sequelize, Sequelize);
 
-// We will import models here later (User, Meeting) like this:
-// db.users = require("./User.js")(sequelize, Sequelize);
+// 4. Create Relationships
+db.users.hasMany(db.meetings, { as: "meetings" });
+db.meetings.belongsTo(db.users, {
+  foreignKey: "userId",
+  as: "user",
+});
 
 module.exports = db;
