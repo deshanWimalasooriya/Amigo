@@ -11,5 +11,12 @@ module.exports = {
     min: 0,     // Minimum number of connections in pool
     acquire: 30000, // Maximum time, in ms, that pool will try to get connection before throwing error
     idle: 10000  // Maximum time, in ms, that a connection can be idle before being released
-  }
+  },
+  dialectOptions: {           // <--- ADD THIS BLOCK
+      ssl: {
+        minVersion: 'TLSv1.2',
+        rejectUnauthorized: true
+      }
+    }
 };
+
