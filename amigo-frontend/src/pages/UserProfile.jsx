@@ -1,41 +1,100 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '../components/Header';
-import { FaCamera, FaCopy, FaPen, FaSave, FaTimes, FaCheckCircle, FaGlobe, FaEnvelope, FaBuilding } from 'react-icons/fa';
+import {
+  FaCamera, FaCopy, FaPen, FaSave, FaTimes,
+  FaCheckCircle, FaGlobe, FaEnvelope, FaBuilding,
+} from 'react-icons/fa';
 import './styles/UserProfile.css';
+import { useAuth } from '../context/AuthContext';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const UserProfile = () => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [copySuccess, setCopySuccess] = useState('');
+  const { user, updateUser } = useAuth();
 
-  // Mock User Data State
-  const [user, setUser] = useState({
-    firstName: 'Alex',
-    lastName: 'Sterling',
-    title: 'Senior Product Manager',
-    company: 'Amigo Tech Solutions',
-    email: 'alex.sterling@amigo.tech',
-    phone: '+1 (555) 019-2834',
-    location: 'San Francisco, CA',
-    timezone: '(GMT-08:00) Pacific Time',
-    meetingId: '394-201-992', // Personal Meeting ID
-    bio: 'Leading product initiatives for next-gen video communication tools. Passionate about remote work culture.'
+  const [isEditing, setIsEditing]     = useState(false);
+  const [copySuccess, setCopySuccess] = useState('');
+  const [saving, setSaving]           = useState(false);
+  const [saveError, setSaveError]     = useState('');
+
+  // Local form state — seeded from global auth context
+  const [form, setForm] = useState({
+    firstName:  '',
+    lastName:   '',
+    jobTitle:   '',
+    company:    '',
+    email:      '',
+    phone:      '',
+    location:   '',
+    timezone:   '(GMT+05:30) India Standard Time',
+    meetingId:  '',
+    bio:        '',
   });
 
-  // Handle Input Change
+  // Whenever the global user object changes (e.g. after session rehydration),
+  // sync it back into local form state so the UI always shows real data.
+  useEffect(() => {
+    if (!user) return;
+    const [firstName = '', ...rest] = (user.fullName || '').split(' ');
+    const lastName = rest.join(' ');
+    setForm({
+      firstName,
+      lastName,
+      jobTitle:  user.jobTitle  || '',
+      company:   user.company   || '',
+      email:     user.email     || '',
+      phone:     user.phone     || '',
+      location:  user.location  || '',
+      timezone:  user.timezone  || '(GMT+05:30) India Standard Time',
+      meetingId: user.pmi       || '',
+      bio:       user.bio       || '',
+    });
+  }, [user]);
+
   const handleChange = (e) => {
-    setUser({ ...user, [e.target.name]: e.target.value });
+    setSaveError('');
+    setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  // Handle Save
-  const handleSave = () => {
-    setIsEditing(false);
-    // Here you would send data to backend
-    console.log("Saved User Data:", user);
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`${API}/api/auth/profile`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          fullName: `${form.firstName} ${form.lastName}`.trim(),
+          phone:    form.phone,
+          location: form.location,
+          timezone: form.timezone,
+          company:  form.company,
+          jobTitle: form.jobTitle,
+          bio:      form.bio,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setSaveError(data.message || 'Failed to save. Try again.');
+        return;
+      }
+
+      // Push updated fields back to global auth context so every
+      // component (e.g. Header, Dashboard greeting) reflects the change
+      updateUser(data);
+      setIsEditing(false);
+    } catch {
+      setSaveError('Cannot reach server. Check your connection.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Handle Copy ID
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(`https://amigo.com/meet/${user.meetingId}`);
+    navigator.clipboard.writeText(`https://amigo.com/meet/${form.meetingId}`);
     setCopySuccess('Copied!');
     setTimeout(() => setCopySuccess(''), 2000);
   };
@@ -45,8 +104,7 @@ const UserProfile = () => {
       <Header />
 
       <main className="profile-content">
-        
-        {/* Page Title & Actions */}
+
         <div className="profile-header-row">
           <div>
             <h1>My Profile</h1>
@@ -55,11 +113,11 @@ const UserProfile = () => {
           <div className="header-actions">
             {isEditing ? (
               <>
-                <button className="btn-cancel" onClick={() => setIsEditing(false)}>
+                <button className="btn-cancel" onClick={() => { setIsEditing(false); setSaveError(''); }}>
                   <FaTimes /> Cancel
                 </button>
-                <button className="btn-save" onClick={handleSave}>
-                  <FaSave /> Save Changes
+                <button className="btn-save" onClick={handleSave} disabled={saving}>
+                  <FaSave /> {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </>
             ) : (
@@ -70,32 +128,44 @@ const UserProfile = () => {
           </div>
         </div>
 
+        {saveError && (
+          <div style={{
+            background: 'rgba(239,68,68,0.12)', border: '1px solid #ef4444',
+            borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+            color: '#fca5a5', fontSize: '0.875rem',
+          }}>
+            {saveError}
+          </div>
+        )}
+
         <div className="profile-grid">
-          
-          {/* --- LEFT COLUMN: Identity Card --- */}
+
+          {/* LEFT: Identity Card */}
           <aside className="identity-card">
             <div className="avatar-section">
               <div className="avatar-large">
-                <span className="avatar-text">{user.firstName[0]}</span>
-                {isEditing && (
-                  <div className="avatar-overlay">
-                    <FaCamera />
-                  </div>
-                )}
+                <span className="avatar-text">
+                  {form.firstName ? form.firstName[0].toUpperCase() : '?'}
+                </span>
+                {isEditing && <div className="avatar-overlay"><FaCamera /></div>}
               </div>
-              <h2>{user.firstName} {user.lastName}</h2>
-              <span className="user-role">{user.title}</span>
+              <h2>{form.firstName} {form.lastName}</h2>
+              <span className="user-role">{form.jobTitle || 'No title set'}</span>
             </div>
 
             <div className="pmi-section">
               <label>Personal Meeting ID</label>
               <div className="pmi-box">
-                <span className="pmi-number">{user.meetingId}</span>
+                <span className="pmi-number">
+                  {form.meetingId
+                    ? `${form.meetingId.slice(0,3)}-${form.meetingId.slice(3,6)}-${form.meetingId.slice(6)}`
+                    : '—'}
+                </span>
                 <button className="btn-icon-copy" onClick={copyToClipboard}>
                   <FaCopy />
                 </button>
               </div>
-              {copySuccess && <span className="copy-feedback"><FaCheckCircle/> Link Copied</span>}
+              {copySuccess && <span className="copy-feedback"><FaCheckCircle /> Link Copied</span>}
               <p className="pmi-hint">Use this ID for instant personal meetings.</p>
             </div>
 
@@ -111,72 +181,47 @@ const UserProfile = () => {
             </div>
           </aside>
 
-          {/* --- RIGHT COLUMN: Details Form --- */}
+          {/* RIGHT: Details Form */}
           <section className="details-card">
-            
-            {/* Section 1: Personal Information */}
+
             <div className="form-section">
               <h3>Personal Information</h3>
               <div className="input-grid">
-                
+
                 <div className="input-group">
                   <label>First Name</label>
-                  <input 
-                    type="text" 
-                    name="firstName" 
-                    value={user.firstName} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <input type="text" name="firstName" value={form.firstName}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group">
                   <label>Last Name</label>
-                  <input 
-                    type="text" 
-                    name="lastName" 
-                    value={user.lastName} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <input type="text" name="lastName" value={form.lastName}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group">
-                  <label><FaBuilding className="icon-tiny"/> Company</label>
-                  <input 
-                    type="text" 
-                    name="company" 
-                    value={user.company} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <label><FaBuilding className="icon-tiny" /> Company</label>
+                  <input type="text" name="company" value={form.company}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group">
                   <label>Job Title</label>
-                  <input 
-                    type="text" 
-                    name="title" 
-                    value={user.title} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <input type="text" name="jobTitle" value={form.jobTitle}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group full-width">
                   <label>Bio</label>
-                  <textarea 
-                    name="bio" 
-                    value={user.bio} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
+                  <textarea name="bio" value={form.bio}
+                    onChange={handleChange} disabled={!isEditing}
                     className={isEditing ? 'editable' : ''}
-                    rows="3"
-                  />
+                    rows="3" />
                 </div>
 
               </div>
@@ -184,56 +229,36 @@ const UserProfile = () => {
 
             <div className="divider-line"></div>
 
-            {/* Section 2: Account & Contact */}
             <div className="form-section">
-              <h3>Contact & Account</h3>
+              <h3>Contact &amp; Account</h3>
               <div className="input-grid">
-                
+
                 <div className="input-group">
-                  <label><FaEnvelope className="icon-tiny"/> Email Address</label>
-                  <input 
-                    type="email" 
-                    value={user.email} 
-                    disabled={true} /* Emails usually hard to change */
-                    className="read-only"
-                  />
+                  <label><FaEnvelope className="icon-tiny" /> Email Address</label>
+                  <input type="email" value={form.email} disabled className="read-only" />
                   <span className="field-note">Contact admin to change</span>
                 </div>
 
                 <div className="input-group">
                   <label>Phone Number</label>
-                  <input 
-                    type="text" 
-                    name="phone" 
-                    value={user.phone} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <input type="text" name="phone" value={form.phone}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group">
-                  <label><FaGlobe className="icon-tiny"/> Location</label>
-                  <input 
-                    type="text" 
-                    name="location" 
-                    value={user.location} 
-                    onChange={handleChange} 
-                    disabled={!isEditing}
-                    className={isEditing ? 'editable' : ''}
-                  />
+                  <label><FaGlobe className="icon-tiny" /> Location</label>
+                  <input type="text" name="location" value={form.location}
+                    onChange={handleChange} disabled={!isEditing}
+                    className={isEditing ? 'editable' : ''} />
                 </div>
 
                 <div className="input-group">
                   <label>Timezone</label>
                   <div className="select-wrapper">
-                    <select 
-                      name="timezone" 
-                      value={user.timezone} 
-                      onChange={handleChange} 
-                      disabled={!isEditing}
-                      className={isEditing ? 'editable' : ''}
-                    >
+                    <select name="timezone" value={form.timezone}
+                      onChange={handleChange} disabled={!isEditing}
+                      className={isEditing ? 'editable' : ''}>
                       <option>(GMT-08:00) Pacific Time</option>
                       <option>(GMT-05:00) Eastern Time</option>
                       <option>(GMT+00:00) London</option>
@@ -247,7 +272,6 @@ const UserProfile = () => {
 
           </section>
         </div>
-
       </main>
     </div>
   );

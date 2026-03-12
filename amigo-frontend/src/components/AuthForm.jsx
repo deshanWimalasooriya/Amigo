@@ -2,65 +2,127 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
 import './styles/AuthForm.css';
+
+const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const AuthForm = () => {
   const navigate = useNavigate();
-  const [isLogin, setIsLogin] = useState(true);
+  const { login } = useAuth();
 
-  // State to capture input values
+  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError]     = useState('');
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
 
-  // Handle Input Change
   const handleChange = (e) => {
+    setError(''); // clear error on any keystroke
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // Toggle Mode
   const toggleMode = () => {
-    setIsLogin((prev) => !prev);
-    // Reset passwords to avoid confusion on switch
-    setFormData((prev) => ({ ...prev, password: '', confirmPassword: '' }));
+    setIsLogin(prev => !prev);
+    setError('');
+    setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isLogin) {
-      console.log("Logging in:", formData.email);
-    } else {
-      if (formData.password !== formData.confirmPassword) {
-        alert("Passwords do not match!");
+    setError('');
+
+    // ── Client-side validation ──
+    if (!formData.email || !formData.password) {
+      setError('Email and password are required.');
+      return;
+    }
+
+    if (!isLogin) {
+      if (!formData.fullName.trim()) {
+        setError('Full name is required.');
         return;
       }
-      console.log("Registering:", formData.fullName);
+      if (formData.password.length < 6) {
+        setError('Password must be at least 6 characters.');
+        return;
+      }
+      if (formData.password !== formData.confirmPassword) {
+        setError('Passwords do not match.');
+        return;
+      }
     }
-    navigate('/dashboard');
+
+    // ── Call the real backend API ──
+    setLoading(true);
+    try {
+      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
+      const body = isLogin
+        ? { email: formData.email, password: formData.password }
+        : { fullName: formData.fullName, email: formData.email, password: formData.password };
+
+      const res = await fetch(`${API}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include', // receive the httpOnly JWT cookie
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Show the exact error message from the backend
+        setError(data.message || 'Something went wrong. Please try again.');
+        return;
+      }
+
+      // ── Success: store user in global context, redirect ──
+      login(data);
+      navigate('/dashboard');
+    } catch (err) {
+      setError('Cannot connect to server. Is the backend running?');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <div className="auth-card-glass">
-      {/* Header Section */}
       <div className="auth-header">
         <h2>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
         <p>
-          {isLogin 
-            ? 'Enter your details to access your meetings.' 
+          {isLogin
+            ? 'Enter your details to access your meetings.'
             : 'Join Amigo to start connecting with the world.'}
         </p>
       </div>
 
-      {/* Form Section */}
+      {/* Error Banner */}
+      {error && (
+        <div style={{
+          background: 'rgba(239,68,68,0.15)',
+          border: '1px solid #ef4444',
+          borderRadius: '8px',
+          padding: '10px 14px',
+          marginBottom: '16px',
+          color: '#fca5a5',
+          fontSize: '0.875rem',
+        }}>
+          {error}
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="auth-form-container">
-        
-        {/* 1. Full Name (Only shows in Register mode) */}
+
+        {/* Full Name — Register only */}
         <AnimatePresence>
           {!isLogin && (
-            <motion.div 
+            <motion.div
               key="fullname-field"
               initial={{ height: 0, opacity: 0, marginBottom: 0 }}
               animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
@@ -70,49 +132,51 @@ const AuthForm = () => {
             >
               <div className="input-group" style={{ marginBottom: 0 }}>
                 <FaUser className="input-icon" />
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   name="fullName"
-                  placeholder="Full Name" 
+                  placeholder="Full Name"
                   value={formData.fullName}
                   onChange={handleChange}
-                  required={!isLogin} 
+                  required={!isLogin}
                 />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* 2. Email (Always Visible - Static to prevent duplication bugs) */}
+        {/* Email */}
         <div className="input-group">
           <FaEnvelope className="input-icon" />
-          <input 
-            type="email" 
+          <input
+            type="email"
             name="email"
-            placeholder="Email Address" 
+            placeholder="Email Address"
             value={formData.email}
             onChange={handleChange}
-            required 
+            required
+            autoComplete="email"
           />
         </div>
 
-        {/* 3. Password (Always Visible) */}
+        {/* Password */}
         <div className="input-group">
           <FaLock className="input-icon" />
-          <input 
-            type="password" 
+          <input
+            type="password"
             name="password"
-            placeholder="Password" 
+            placeholder="Password"
             value={formData.password}
             onChange={handleChange}
-            required 
+            required
+            autoComplete={isLogin ? 'current-password' : 'new-password'}
           />
         </div>
 
-        {/* 4. Confirm Password (Only shows in Register mode) */}
+        {/* Confirm Password — Register only */}
         <AnimatePresence>
           {!isLogin && (
-            <motion.div 
+            <motion.div
               key="confirm-field"
               initial={{ height: 0, opacity: 0, marginBottom: 0 }}
               animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
@@ -122,45 +186,44 @@ const AuthForm = () => {
             >
               <div className="input-group" style={{ marginBottom: 0 }}>
                 <FaLock className="input-icon" />
-                <input 
-                  type="password" 
+                <input
+                  type="password"
                   name="confirmPassword"
-                  placeholder="Confirm Password" 
+                  placeholder="Confirm Password"
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   required={!isLogin}
+                  autoComplete="new-password"
                 />
               </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Forgot Password Link (Login Only) */}
         {isLogin && (
           <div className="forgot-pass">
             <a href="#">Forgot Password?</a>
           </div>
         )}
 
-        {/* Submit Button */}
-        <button type="submit" className="btn-submit-gradient">
-          {isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight style={{ marginLeft: '8px' }}/>
+        <button type="submit" className="btn-submit-gradient" disabled={loading}>
+          {loading
+            ? (isLogin ? 'Signing in...' : 'Creating account...')
+            : (<>{isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight style={{ marginLeft: 8 }} /></>)
+          }
         </button>
 
-        {/* Divider */}
         <div className="divider"><span>OR</span></div>
 
-        {/* Social Buttons */}
         <div className="social-login">
           <button type="button" className="social-btn"><FaGoogle /> Google</button>
           <button type="button" className="social-btn"><FaGithub /> GitHub</button>
         </div>
       </form>
 
-      {/* Toggle Footer */}
       <div className="auth-footer">
         <p>
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
+          {isLogin ? "Don't have an account? " : 'Already have an account? '}
           <span onClick={toggleMode} className="toggle-link">
             {isLogin ? 'Register' : 'Login'}
           </span>
