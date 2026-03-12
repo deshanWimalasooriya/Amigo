@@ -7,10 +7,9 @@ import './styles/JoinMeeting.css';
 const JoinMeeting = () => {
   const navigate = useNavigate();
 
-  // State
   const [formData, setFormData] = useState({
     meetingId: '',
-    username: 'Alex Sterling', // Pre-fill from profile usually
+    username: 'Alex Sterling',
   });
 
   const [settings, setSettings] = useState({
@@ -28,9 +27,17 @@ const JoinMeeting = () => {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    console.log("Joining Meeting:", formData, settings);
-    // Navigate to the actual video room (we will build this next)
-    navigate('/room'); 
+    // Strip whitespace and dashes so "844-922-101" and "844922101" both work
+    const roomId = formData.meetingId.replace(/[\s-]+/g, '');
+    if (!roomId) return;
+    // Navigate to the dynamic room route, passing user preferences via state
+    navigate(`/room/${roomId}`, {
+      state: {
+        userName: formData.username,
+        audio: settings.audio,
+        video: settings.video
+      }
+    });
   };
 
   return (
@@ -38,7 +45,7 @@ const JoinMeeting = () => {
       <Header />
 
       <div className="join-container">
-        
+
         {/* --- LEFT: Input Section --- */}
         <div className="join-form-panel">
           <div className="panel-header">
@@ -48,17 +55,17 @@ const JoinMeeting = () => {
           </div>
 
           <form onSubmit={handleJoin}>
-            
+
             {/* Meeting ID Input */}
             <div className="form-group large-input">
               <label>Meeting ID or Personal Link Name</label>
               <div className="input-icon-wrapper">
-                <input 
-                  type="text" 
-                  name="meetingId" 
-                  value={formData.meetingId} 
-                  onChange={handleChange} 
-                  placeholder="e.g. 844-922-101" 
+                <input
+                  type="text"
+                  name="meetingId"
+                  value={formData.meetingId}
+                  onChange={handleChange}
+                  placeholder="e.g. 844-922-101"
                   autoFocus
                   required
                 />
@@ -70,12 +77,12 @@ const JoinMeeting = () => {
               <label>Your Display Name</label>
               <div className="input-icon-wrapper">
                 <FaUser className="field-icon" />
-                <input 
-                  type="text" 
-                  name="username" 
-                  value={formData.username} 
-                  onChange={handleChange} 
-                  placeholder="Your Name" 
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleChange}
+                  placeholder="Your Name"
                   required
                 />
               </div>
@@ -84,17 +91,17 @@ const JoinMeeting = () => {
             {/* Audio/Video Options */}
             <div className="device-toggles">
               <p className="toggles-title">Join Options</p>
-              
+
               <div className="toggle-row">
                 <div className="toggle-info">
                   <span className="toggle-name">Don't connect to audio</span>
                   <span className="toggle-desc">Join without microphone audio</span>
                 </div>
                 <label className="switch">
-                  <input 
-                    type="checkbox" 
-                    checked={!settings.audio} 
-                    onChange={() => toggleSetting('audio')} 
+                  <input
+                    type="checkbox"
+                    checked={!settings.audio}
+                    onChange={() => toggleSetting('audio')}
                   />
                   <span className="slider round"></span>
                 </label>
@@ -106,10 +113,10 @@ const JoinMeeting = () => {
                   <span className="toggle-desc">Join with camera off</span>
                 </div>
                 <label className="switch">
-                  <input 
-                    type="checkbox" 
-                    checked={!settings.video} 
-                    onChange={() => toggleSetting('video')} 
+                  <input
+                    type="checkbox"
+                    checked={!settings.video}
+                    onChange={() => toggleSetting('video')}
                   />
                   <span className="slider round"></span>
                 </label>
@@ -118,8 +125,8 @@ const JoinMeeting = () => {
 
             <div className="form-actions">
               <button type="button" className="btn-cancel" onClick={() => navigate('/dashboard')}>Cancel</button>
-              <button 
-                type="submit" 
+              <button
+                type="submit"
                 className={`btn-join ${formData.meetingId ? 'active' : ''}`}
                 disabled={!formData.meetingId}
               >
@@ -132,9 +139,8 @@ const JoinMeeting = () => {
         {/* --- RIGHT: Tech Check Preview --- */}
         <div className="tech-check-panel">
           <div className="preview-label">PRE-FLIGHT CHECK</div>
-          
+
           <div className="camera-card">
-            {/* The Screen Area */}
             <div className={`video-screen ${!settings.video ? 'video-off' : ''}`}>
               {settings.video ? (
                 <div className="fake-feed">
@@ -162,7 +168,7 @@ const JoinMeeting = () => {
             </div>
 
             <div className="camera-footer">
-              <p>{settings.video ? "Camera is Ready" : "Camera is Off"}</p>
+              <p>{settings.video ? 'Camera is Ready' : 'Camera is Off'}</p>
               <button className="btn-test-device">Test Speaker and Microphone</button>
             </div>
           </div>

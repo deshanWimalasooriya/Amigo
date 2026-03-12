@@ -1,7 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
-
 // Importing Pages
 import Dashboard from './pages/Dashboard.jsx';
 import WelcomePage from './pages/WelcomePage';
@@ -23,13 +22,14 @@ function App() {
       <div className="app-main">
         <Routes>
           <Route path="/" element={<WelcomePage />} />
-          <Route path="/auth" element={<AuthPage />} /> 
+          <Route path="/auth" element={<AuthPage />} />
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/user-profile" element={<UserProfile />} />
           <Route path="/schedule-meeting" element={<ScheduleMeeting />} />
           <Route path="/join" element={<JoinMeeting />} />
           <Route path="/new-meeting" element={<NewMeeting />} />
-          <Route path="/room" element={<Room />} />
+          {/* Dynamic room route — :roomId identifies which meeting room to join */}
+          <Route path="/room/:roomId" element={<Room />} />
           <Route path="/meetings" element={<MyMeetings />} />
           <Route path="/recordings" element={<Recordings />} />
           <Route path="/history" element={<History />} />
