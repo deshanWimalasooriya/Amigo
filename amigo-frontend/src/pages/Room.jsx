@@ -1,11 +1,21 @@
+/**
+ * Room.jsx — WebRTC Video Room
+ *
+ * Uses native browser RTCPeerConnection (no simple-peer dependency).
+ * Signaling is handled by Socket.IO events defined in amigo-backend/server.js.
+ *
+ * Signal flow:
+ *   Existing user (caller)  ─── offer  ──►  New user (answerer)
+ *   New user (answerer)     ─── answer ──►  Existing user (caller)
+ *   Both peers              ◄── ice-candidate ──► Both peers
+ */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import Peer from 'simple-peer';
 import { io } from 'socket.io-client';
 import {
   FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash,
   FaDesktop, FaPhoneSlash, FaComments, FaUserFriends,
-  FaChevronRight, FaPaperPlane, FaExpand, FaCompress
+  FaChevronRight, FaPaperPlane, FaExpand, FaCompress,
 } from 'react-icons/fa';
 import './styles/Room.css';
 
@@ -14,28 +24,27 @@ import './styles/Room.css';
 // ---------------------------------------------------------------------------
 const SOCKET_SERVER = import.meta.env.VITE_SOCKET_SERVER || 'http://localhost:5000';
 
+const RTC_CONFIG = {
+  iceServers: [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+  ],
+};
+
 // ---------------------------------------------------------------------------
-// RemoteVideo — isolated component so each peer stream gets its own ref
-// Defined OUTSIDE Room to avoid recreation on every parent re-render
+// RemoteVideo — isolated component so each peer's stream gets its own ref.
+// MUST be defined outside Room so React does not recreate it on every
+// parent re-render (which would wipe the srcObject and black out the video).
 // ---------------------------------------------------------------------------
-const RemoteVideo = React.memo(({ peer, peerName }) => {
+const RemoteVideo = React.memo(({ peerId, peerName, streamRef }) => {
   const videoRef = useRef(null);
 
+  // Attach the stream as soon as this tile mounts or the stream changes
   useEffect(() => {
-    // Listen for the remote stream once the WebRTC connection is established
-    const handleStream = (remoteStream) => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = remoteStream;
-      }
-    };
-
-    peer.on('stream', handleStream);
-
-    // Cleanup: remove listener when this component unmounts
-    return () => {
-      peer.off('stream', handleStream);
-    };
-  }, [peer]);
+    if (videoRef.current && streamRef.current) {
+      videoRef.current.srcObject = streamRef.current;
+    }
+  }, [streamRef]);
 
   return (
     <div className="video-tile">
@@ -43,241 +52,241 @@ const RemoteVideo = React.memo(({ peer, peerName }) => {
         ref={videoRef}
         autoPlay
         playsInline
-        style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+        style={{
+          width: '100%', height: '100%',
+          objectFit: 'cover', borderRadius: '12px',
+        }}
       />
       <span className="participant-label">{peerName}</span>
     </div>
   );
 });
-
 RemoteVideo.displayName = 'RemoteVideo';
 
 // ---------------------------------------------------------------------------
-// MAIN ROOM COMPONENT
+// MAIN COMPONENT
 // ---------------------------------------------------------------------------
 const Room = () => {
-  const navigate = useNavigate();
+  const navigate   = useNavigate();
   const { roomId } = useParams();
-  const location = useLocation();
+  const location   = useLocation();
 
-  // Read preferences passed from JoinMeeting / NewMeeting via navigate state
   const {
-    userName = 'You',
+    userName  = 'You',
     audio: initAudio = true,
     video: initVideo = true,
   } = location.state || {};
 
-  // --- REFS — values that must NOT trigger re-renders ---
-  const socketRef        = useRef(null);   // Socket.IO connection
-  const myVideoRef       = useRef(null);   // <video> element for local stream
-  const myStreamRef      = useRef(null);   // Local MediaStream
-  const peersRef         = useRef([]);     // [{ peerId, peer, peerName }]
-  const chatBottomRef    = useRef(null);   // Auto-scroll anchor
-  const isCleanedUp      = useRef(false);  // Guard against double-cleanup (React StrictMode)
+  // ── Refs (never cause re-renders) ────────────────────────────────────────
+  const socketRef     = useRef(null);
+  const myVideoRef    = useRef(null);
+  const myStreamRef   = useRef(null);
+  const isCleanedUp   = useRef(false);
+  const chatBottomRef = useRef(null);
 
-  // --- STATE — values that DO trigger re-renders ---
-  const [peers, setPeers]               = useState([]);   // drives RemoteVideo list
-  const [micOn, setMicOn]               = useState(initAudio);
-  const [videoOn, setVideoOn]           = useState(initVideo);
-  const [screenShare, setScreenShare]   = useState(false);
-  const [sidePanelOpen, setSidePanelOpen] = useState(false);
-  const [activeTab, setActiveTab]       = useState('chat');
-  const [isFullscreen, setIsFullscreen] = useState(false);
-  const [messages, setMessages]         = useState([]);
-  const [newMessage, setNewMessage]     = useState('');
-  const [time, setTime]                 = useState(new Date());
-  const [mediaError, setMediaError]     = useState(null); // show user-facing error
+  // pcsRef: Map<peerId, { pc: RTCPeerConnection, streamRef: { current: MediaStream } }>
+  // Stored as a ref so signaling callbacks always see the latest Map
+  // without needing to be inside state-update closures.
+  const pcsRef = useRef(new Map());
 
-  // ---------------------------------------------------------------------------
-  // CLOCK
-  // ---------------------------------------------------------------------------
+  // ── State (cause re-renders) ─────────────────────────────────────────────
+  // peers drives the RemoteVideo list:
+  // [{ peerId, peerName, streamRef }]
+  const [peers, setPeers]                   = useState([]);
+  const [micOn, setMicOn]                   = useState(initAudio);
+  const [videoOn, setVideoOn]               = useState(initVideo);
+  const [screenShare, setScreenShare]       = useState(false);
+  const [sidePanelOpen, setSidePanelOpen]   = useState(false);
+  const [activeTab, setActiveTab]           = useState('chat');
+  const [isFullscreen, setIsFullscreen]     = useState(false);
+  const [messages, setMessages]             = useState([]);
+  const [newMessage, setNewMessage]         = useState('');
+  const [time, setTime]                     = useState(new Date());
+  const [mediaError, setMediaError]         = useState(null);
+
+  // ── Clock ─────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(timer);
+    const t = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(t);
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // AUTO-SCROLL chat to bottom on new messages
-  // ---------------------------------------------------------------------------
+  // ── Auto-scroll chat ──────────────────────────────────────────────────────
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ---------------------------------------------------------------------------
-  // HELPER: safely add a peer to both ref and state
-  // ---------------------------------------------------------------------------
-  const addPeerToState = useCallback((peerId, peer, peerName) => {
-    // Guard against duplicate peer entries (can happen with fast re-joins)
-    if (peersRef.current.find(p => p.peerId === peerId)) return;
-    peersRef.current.push({ peerId, peer, peerName });
-    setPeers(prev => [...prev, { peerId, peer, peerName }]);
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  /**
+   * Create a new RTCPeerConnection for `peerId`.
+   * Attaches all necessary event handlers before any signaling begins.
+   * Returns { pc, streamRef } so callers can store it in pcsRef.
+   */
+  const createPC = useCallback((peerId, peerName, localStream) => {
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+
+    // A ref-based container for this peer's incoming stream.
+    // Using a ref (not state) means updating the stream never
+    // triggers a re-render of the whole Room — only RemoteVideo reads it.
+    const streamRef = { current: new MediaStream() };
+
+    // ── Add all local tracks to the connection ──
+    localStream.getTracks().forEach(track => {
+      pc.addTrack(track, localStream);
+    });
+
+    // ── Receive remote tracks ──
+    // ontrack fires once per remote track (audio + video separately).
+    // We append each track to streamRef so RemoteVideo stays live.
+    pc.ontrack = (event) => {
+      event.streams[0]?.getTracks().forEach(track => {
+        streamRef.current.addTrack(track);
+      });
+      // If the video element already mounted, attach the stream directly.
+      // This handles the case where ontrack fires after RemoteVideo mounts.
+      setPeers(prev =>
+        prev.map(p =>
+          p.peerId === peerId ? { ...p, streamRef } : p
+        )
+      );
+    };
+
+    // ── Send ICE candidates to the remote peer via the signaling server ──
+    pc.onicecandidate = (event) => {
+      if (event.candidate && !isCleanedUp.current) {
+        socketRef.current?.emit('ice-candidate', event.candidate, peerId);
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (['failed', 'disconnected', 'closed'].includes(pc.iceConnectionState)) {
+        console.warn(`[ICE] ${peerId} state: ${pc.iceConnectionState}`);
+      }
+    };
+
+    return { pc, streamRef };
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // HELPER: remove a peer from both ref and state
-  // ---------------------------------------------------------------------------
-  const removePeer = useCallback((userId) => {
-    const entry = peersRef.current.find(p => p.peerId === userId);
+  /**
+   * Safely add a peer entry to both pcsRef and state.
+   * Duplicate guard prevents double tiles on rapid re-joins.
+   */
+  const addPeer = useCallback((peerId, peerName, localStream) => {
+    if (pcsRef.current.has(peerId)) return null;
+    const { pc, streamRef } = createPC(peerId, peerName, localStream);
+    pcsRef.current.set(peerId, { pc, streamRef });
+    setPeers(prev => [...prev, { peerId, peerName, streamRef }]);
+    return pc;
+  }, [createPC]);
+
+  /**
+   * Close and remove a peer's connection + video tile.
+   */
+  const removePeer = useCallback((peerId) => {
+    const entry = pcsRef.current.get(peerId);
     if (entry) {
-      try { entry.peer.destroy(); } catch (_) {}
+      try { entry.pc.close(); } catch (_) {}
+      pcsRef.current.delete(peerId);
     }
-    peersRef.current = peersRef.current.filter(p => p.peerId !== userId);
-    setPeers(prev => prev.filter(p => p.peerId !== userId));
+    setPeers(prev => prev.filter(p => p.peerId !== peerId));
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // HELPER: createPeer — WE initiate (caller)
-  // Called when an existing user is already in the room when we arrive,
-  // OR when we are already in the room and a new user arrives.
-  // ---------------------------------------------------------------------------
-  const createPeer = useCallback((targetSocketId, stream) => {
-    const peer = new Peer({
-      initiator: true,
-      trickle: true,   // trickle=true streams ICE candidates as they are found (faster)
-      stream,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
-    });
-
-    // When simple-peer generates a signal (offer or ICE candidate), forward it
-    peer.on('signal', signal => {
-      if (!isCleanedUp.current) {
-        socketRef.current?.emit('offer', signal, targetSocketId);
-      }
-    });
-
-    peer.on('error', err => {
-      console.error(`[Peer][caller → ${targetSocketId}] Error:`, err.message);
-    });
-
-    return peer;
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // HELPER: addPeer — THEY initiated (answerer)
-  // Called when we receive an offer from someone who joined before us.
-  // ---------------------------------------------------------------------------
-  const answerPeer = useCallback((incomingSignal, callerSocketId, stream) => {
-    const peer = new Peer({
-      initiator: false,
-      trickle: true,
-      stream,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' },
-        ],
-      },
-    });
-
-    peer.on('signal', signal => {
-      if (!isCleanedUp.current) {
-        socketRef.current?.emit('answer', signal, callerSocketId);
-      }
-    });
-
-    peer.on('error', err => {
-      console.error(`[Peer][answerer ← ${callerSocketId}] Error:`, err.message);
-    });
-
-    // Feed the incoming offer into simple-peer so it generates an answer
-    peer.signal(incomingSignal);
-
-    return peer;
-  }, []);
-
-  // ---------------------------------------------------------------------------
-  // MAIN EFFECT — runs once on mount, cleans up on unmount
-  // ---------------------------------------------------------------------------
+  // ── Main Effect ────────────────────────────────────────────────────────────
   useEffect(() => {
     isCleanedUp.current = false;
 
-    // 1. Connect to signaling server
+    // 1. Connect Socket.IO
     const socket = io(SOCKET_SERVER, {
       withCredentials: true,
       transports: ['websocket', 'polling'],
     });
     socketRef.current = socket;
 
-    // 2. Request local camera + microphone
+    // 2. Get local camera + mic
     navigator.mediaDevices
       .getUserMedia({ video: initVideo, audio: initAudio })
-      .then(stream => {
+      .then(async (stream) => {
         if (isCleanedUp.current) {
-          // Component unmounted before promise resolved — stop tracks immediately
           stream.getTracks().forEach(t => t.stop());
           return;
         }
 
         myStreamRef.current = stream;
+        if (myVideoRef.current) myVideoRef.current.srcObject = stream;
 
-        // Attach our own stream to the local <video> element
-        if (myVideoRef.current) {
-          myVideoRef.current.srcObject = stream;
-        }
-
-        // 3. Tell the server we are in this room
+        // 3. Join the room
         socket.emit('join-room', roomId, socket.id, userName);
 
-        // -----------------------------------------------------------------
-        // 4. A NEW user joined AFTER us → we are the CALLER
-        //    The server sends us their socketId and name
-        // -----------------------------------------------------------------
-        socket.on('user-connected', (newUserId, newUserName) => {
+        // ── EVENT: New user joined AFTER us → we are the CALLER ──────────
+        socket.on('user-connected', async (newUserId, newUserName) => {
           if (isCleanedUp.current) return;
-          const peer = createPeer(newUserId, stream);
-          addPeerToState(newUserId, peer, newUserName || 'Peer');
-        });
 
-        // -----------------------------------------------------------------
-        // 5. We are new; an EXISTING user sends us an offer → we ANSWER
-        // -----------------------------------------------------------------
-        socket.on('offer', (incomingSignal, callerSocketId) => {
-          if (isCleanedUp.current) return;
-          const peer = answerPeer(incomingSignal, callerSocketId, stream);
-          addPeerToState(callerSocketId, peer, 'Peer');
-        });
+          const pc = addPeer(newUserId, newUserName || 'Peer', stream);
+          if (!pc) return; // duplicate guard fired
 
-        // -----------------------------------------------------------------
-        // 6. Receive an answer to OUR offer
-        // -----------------------------------------------------------------
-        socket.on('answer', (signal, peerId) => {
-          if (isCleanedUp.current) return;
-          const entry = peersRef.current.find(p => p.peerId === peerId);
-          if (entry) {
-            try { entry.peer.signal(signal); } catch (e) {
-              console.warn('[answer] Could not signal peer:', e.message);
-            }
+          try {
+            // Create and send an SDP offer
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit('offer', pc.localDescription, newUserId);
+          } catch (err) {
+            console.error('[offer] Failed:', err);
           }
         });
 
-        // -----------------------------------------------------------------
-        // 7. Relay ICE candidates for NAT traversal
-        // -----------------------------------------------------------------
-        socket.on('ice-candidate', (candidate, peerId) => {
+        // ── EVENT: Receive an offer → we are the ANSWERER ────────────────
+        socket.on('offer', async (incomingOffer, callerSocketId) => {
           if (isCleanedUp.current) return;
-          const entry = peersRef.current.find(p => p.peerId === peerId);
-          if (entry) {
-            try { entry.peer.signal(candidate); } catch (e) {
-              console.warn('[ice-candidate] Could not signal peer:', e.message);
-            }
+
+          const pc = addPeer(callerSocketId, 'Peer', stream);
+          if (!pc) return;
+
+          try {
+            await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            socket.emit('answer', pc.localDescription, callerSocketId);
+          } catch (err) {
+            console.error('[answer] Failed:', err);
           }
         });
 
-        // -----------------------------------------------------------------
-        // 8. Someone left
-        // -----------------------------------------------------------------
+        // ── EVENT: Receive an answer to our offer ────────────────────────
+        socket.on('answer', async (incomingAnswer, peerId) => {
+          if (isCleanedUp.current) return;
+          const entry = pcsRef.current.get(peerId);
+          if (!entry) return;
+          try {
+            // Only apply if we don't already have a remote description
+            if (!entry.pc.remoteDescription) {
+              await entry.pc.setRemoteDescription(
+                new RTCSessionDescription(incomingAnswer)
+              );
+            }
+          } catch (err) {
+            console.warn('[answer] setRemoteDescription failed:', err.message);
+          }
+        });
+
+        // ── EVENT: Receive ICE candidate ─────────────────────────────────
+        socket.on('ice-candidate', async (candidate, peerId) => {
+          if (isCleanedUp.current) return;
+          const entry = pcsRef.current.get(peerId);
+          if (!entry) return;
+          try {
+            await entry.pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (err) {
+            // Benign: can fire if the peer disconnected mid-negotiation
+            console.warn('[ice-candidate] addIceCandidate failed:', err.message);
+          }
+        });
+
+        // ── EVENT: A peer left ────────────────────────────────────────────
         socket.on('user-disconnected', (userId) => {
           removePeer(userId);
         });
 
-        // -----------------------------------------------------------------
-        // 9. Receive chat messages (from socket server broadcast)
-        // -----------------------------------------------------------------
+        // ── EVENT: Chat messages ──────────────────────────────────────────
         socket.on('chat-message', (message, senderName, senderId) => {
           if (isCleanedUp.current) return;
           setMessages(prev => [...prev, {
@@ -290,40 +299,26 @@ const Room = () => {
       })
       .catch(err => {
         console.error('getUserMedia error:', err);
-        // Show a friendly error instead of a blank broken screen
         setMediaError(
           err.name === 'NotAllowedError'
-            ? 'Camera/microphone access was denied. Please allow permissions in your browser and refresh.'
+            ? 'Camera/microphone access was denied. Please allow permissions and refresh.'
             : `Could not access media devices: ${err.message}`
         );
       });
 
-    // -----------------------------------------------------------------
-    // CLEANUP — fires when the component unmounts (user leaves the page)
-    // -----------------------------------------------------------------
+    // ── Cleanup on unmount ────────────────────────────────────────────────
     return () => {
       isCleanedUp.current = true;
-
-      // Stop all local media tracks (turns off camera/mic LED)
       myStreamRef.current?.getTracks().forEach(t => t.stop());
-
-      // Destroy all peer connections
-      peersRef.current.forEach(({ peer }) => {
-        try { peer.destroy(); } catch (_) {}
-      });
-      peersRef.current = [];
-
-      // Disconnect socket
+      pcsRef.current.forEach(({ pc }) => { try { pc.close(); } catch (_) {} });
+      pcsRef.current.clear();
       socket.disconnect();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [roomId]); // Only re-run if roomId changes (navigating to a different room)
+  }, [roomId]);
 
-  // ---------------------------------------------------------------------------
-  // CONTROL HANDLERS
-  // ---------------------------------------------------------------------------
+  // ── Control Handlers ──────────────────────────────────────────────────────
 
-  // Mute / Unmute — toggles the actual audio track, notifies peers
   const toggleMic = useCallback(() => {
     const track = myStreamRef.current?.getAudioTracks()[0];
     if (!track) return;
@@ -332,7 +327,6 @@ const Room = () => {
     socketRef.current?.emit('toggle-audio', !track.enabled);
   }, []);
 
-  // Camera on/off — toggles the actual video track, notifies peers
   const toggleVideo = useCallback(() => {
     const track = myStreamRef.current?.getVideoTracks()[0];
     if (!track) return;
@@ -341,46 +335,33 @@ const Room = () => {
     socketRef.current?.emit('toggle-video', !track.enabled);
   }, []);
 
-  // Screen Share — replaces the video track in every peer connection
-  const toggleScreenShare = useCallback(async () => {
-    if (!screenShare) {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
-        const screenTrack = screenStream.getVideoTracks()[0];
-
-        // Replace track sent to every remote peer
-        peersRef.current.forEach(({ peer }) => {
-          const sender = peer._pc?.getSenders().find(s => s.track?.kind === 'video');
-          if (sender) sender.replaceTrack(screenTrack).catch(console.warn);
-        });
-
-        // Show screen in our own preview
-        if (myVideoRef.current) myVideoRef.current.srcObject = screenStream;
-        setScreenShare(true);
-
-        // When user clicks "Stop sharing" in the browser's native UI
-        screenTrack.addEventListener('ended', () => {
-          stopScreenShare();
-        }, { once: true });
-      } catch (err) {
-        console.error('Screen share failed:', err);
-      }
-    } else {
-      stopScreenShare();
-    }
-  }, [screenShare]); // eslint-disable-line
-
   const stopScreenShare = useCallback(() => {
     const camTrack = myStreamRef.current?.getVideoTracks()[0];
-    peersRef.current.forEach(({ peer }) => {
-      const sender = peer._pc?.getSenders().find(s => s.track?.kind === 'video');
+    pcsRef.current.forEach(({ pc }) => {
+      const sender = pc.getSenders().find(s => s.track?.kind === 'video');
       if (sender && camTrack) sender.replaceTrack(camTrack).catch(console.warn);
     });
     if (myVideoRef.current) myVideoRef.current.srcObject = myStreamRef.current;
     setScreenShare(false);
   }, []);
 
-  // Send chat message via Socket.IO
+  const toggleScreenShare = useCallback(async () => {
+    if (screenShare) { stopScreenShare(); return; }
+    try {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+      const screenTrack  = screenStream.getVideoTracks()[0];
+      pcsRef.current.forEach(({ pc }) => {
+        const sender = pc.getSenders().find(s => s.track?.kind === 'video');
+        if (sender) sender.replaceTrack(screenTrack).catch(console.warn);
+      });
+      if (myVideoRef.current) myVideoRef.current.srcObject = screenStream;
+      setScreenShare(true);
+      screenTrack.addEventListener('ended', stopScreenShare, { once: true });
+    } catch (err) {
+      console.error('Screen share failed:', err);
+    }
+  }, [screenShare, stopScreenShare]);
+
   const handleSendMessage = useCallback((e) => {
     e.preventDefault();
     const trimmed = newMessage.trim();
@@ -389,14 +370,12 @@ const Room = () => {
     setNewMessage('');
   }, [newMessage, userName]);
 
-  // Leave the room cleanly
   const handleEndCall = useCallback(() => {
     myStreamRef.current?.getTracks().forEach(t => t.stop());
     socketRef.current?.disconnect();
     navigate('/dashboard');
   }, [navigate]);
 
-  // Fullscreen toggle
   const toggleFullscreen = useCallback(() => {
     if (!document.fullscreenElement) {
       document.documentElement.requestFullscreen?.();
@@ -407,7 +386,6 @@ const Room = () => {
     }
   }, []);
 
-  // Side panel open/close
   const toggleSidePanel = useCallback((tab) => {
     setSidePanelOpen(prev => {
       if (prev && activeTab === tab) return false;
@@ -416,22 +394,19 @@ const Room = () => {
     });
   }, [activeTab]);
 
-  // Copy room ID to clipboard for sharing
   const copyRoomId = useCallback(() => {
     navigator.clipboard.writeText(roomId)
       .then(() => alert(`Room ID copied: ${roomId}`))
       .catch(() => prompt('Copy this Room ID:', roomId));
   }, [roomId]);
 
-  // ---------------------------------------------------------------------------
-  // MEDIA ERROR SCREEN
-  // ---------------------------------------------------------------------------
+  // ── Media Error Screen ────────────────────────────────────────────────────
   if (mediaError) {
     return (
       <div className="room-container" style={{ alignItems: 'center', justifyContent: 'center' }}>
         <div style={{
           color: 'white', textAlign: 'center', padding: '2rem',
-          background: '#1e293b', borderRadius: '12px', maxWidth: '500px'
+          background: '#1e293b', borderRadius: '12px', maxWidth: '500px',
         }}>
           <FaVideoSlash style={{ fontSize: '3rem', color: '#ef4444', marginBottom: '1rem' }} />
           <h2 style={{ marginBottom: '1rem' }}>Cannot Access Camera / Microphone</h2>
@@ -440,7 +415,7 @@ const Room = () => {
             onClick={() => navigate('/dashboard')}
             style={{
               background: '#4f46e5', color: 'white', border: 'none',
-              padding: '10px 24px', borderRadius: '8px', cursor: 'pointer'
+              padding: '10px 24px', borderRadius: '8px', cursor: 'pointer',
             }}
           >
             Back to Dashboard
@@ -450,13 +425,11 @@ const Room = () => {
     );
   }
 
-  // ---------------------------------------------------------------------------
-  // RENDER
-  // ---------------------------------------------------------------------------
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="room-container">
 
-      {/* ── 1. TOP HEADER ── */}
+      {/* 1. HEADER */}
       <header className="room-header">
         <div className="meeting-info">
           <span className="secure-badge"><FaVideo /> Secure</span>
@@ -472,24 +445,26 @@ const Room = () => {
         </div>
       </header>
 
-      {/* ── 2. VIDEO GRID ── */}
+      {/* 2. VIDEO GRID */}
       <main className={`main-stage ${sidePanelOpen ? 'shrink' : ''}`}>
         <div className="video-grid">
 
-          {/* LOCAL VIDEO — always first tile */}
+          {/* LOCAL TILE */}
           <div className="video-tile">
             <video
               ref={myVideoRef}
               autoPlay
               playsInline
-              muted              /* mute own audio to prevent echo */
-              style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '12px' }}
+              muted
+              style={{
+                width: '100%', height: '100%',
+                objectFit: 'cover', borderRadius: '12px',
+              }}
             />
             <span className="participant-label">
               {userName} (You)
               {!micOn && <FaMicrophoneSlash className="mic-off-icon" />}
             </span>
-            {/* Show avatar overlay if camera is off */}
             {!videoOn && (
               <div className="video-placeholder" style={{ position: 'absolute', inset: 0 }}>
                 <div className="avatar-circle">{userName.charAt(0).toUpperCase()}</div>
@@ -497,15 +472,20 @@ const Room = () => {
             )}
           </div>
 
-          {/* REMOTE VIDEOS — one per connected peer */}
-          {peers.map(({ peerId, peer, peerName }) => (
-            <RemoteVideo key={peerId} peer={peer} peerName={peerName} />
+          {/* REMOTE TILES */}
+          {peers.map(({ peerId, peerName, streamRef }) => (
+            <RemoteVideo
+              key={peerId}
+              peerId={peerId}
+              peerName={peerName}
+              streamRef={streamRef}
+            />
           ))}
 
         </div>
       </main>
 
-      {/* ── 3. FLOATING CONTROL DOCK ── */}
+      {/* 3. CONTROL DOCK */}
       <div className="control-dock">
         <div className="dock-group left">
           <span style={{ color: '#94a3b8', fontSize: '0.75rem' }}>
@@ -514,38 +494,33 @@ const Room = () => {
         </div>
 
         <div className="dock-group center">
-
-          {/* Mute / Unmute */}
           <button
             className={`dock-btn ${!micOn ? 'danger' : ''}`}
             onClick={toggleMic}
-            title={micOn ? 'Mute microphone' : 'Unmute microphone'}
+            title={micOn ? 'Mute' : 'Unmute'}
           >
             {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
             <span>{micOn ? 'Mute' : 'Unmute'}</span>
           </button>
 
-          {/* Stop / Start Video */}
           <button
             className={`dock-btn ${!videoOn ? 'danger' : ''}`}
             onClick={toggleVideo}
-            title={videoOn ? 'Stop camera' : 'Start camera'}
+            title={videoOn ? 'Stop Video' : 'Start Video'}
           >
             {videoOn ? <FaVideo /> : <FaVideoSlash />}
             <span>{videoOn ? 'Stop Video' : 'Start Video'}</span>
           </button>
 
-          {/* Screen Share */}
           <button
             className={`dock-btn ${screenShare ? 'active' : ''}`}
             onClick={toggleScreenShare}
-            title={screenShare ? 'Stop sharing' : 'Share screen'}
+            title={screenShare ? 'Stop Share' : 'Share Screen'}
           >
             <FaDesktop />
             <span>{screenShare ? 'Stop Share' : 'Share'}</span>
           </button>
 
-          {/* Participants Panel */}
           <button
             className={`dock-btn ${sidePanelOpen && activeTab === 'participants' ? 'active' : ''}`}
             onClick={() => toggleSidePanel('participants')}
@@ -556,7 +531,6 @@ const Room = () => {
             <span className="badge-count">{peers.length + 1}</span>
           </button>
 
-          {/* Chat Panel */}
           <button
             className={`dock-btn ${sidePanelOpen && activeTab === 'chat' ? 'active' : ''}`}
             onClick={() => toggleSidePanel('chat')}
@@ -568,14 +542,14 @@ const Room = () => {
         </div>
 
         <div className="dock-group right">
-          <button className="dock-btn end-call" onClick={handleEndCall} title="Leave meeting">
+          <button className="dock-btn end-call" onClick={handleEndCall}>
             <FaPhoneSlash />
             <span>End</span>
           </button>
         </div>
       </div>
 
-      {/* ── 4. SIDE PANEL ── */}
+      {/* 4. SIDE PANEL */}
       <aside className={`side-panel ${sidePanelOpen ? 'open' : ''}`}>
         <div className="panel-header">
           <h3>
@@ -588,7 +562,6 @@ const Room = () => {
           </button>
         </div>
 
-        {/* CHAT TAB */}
         {activeTab === 'chat' && (
           <div className="panel-content chat-mode">
             <div className="chat-messages">
@@ -598,10 +571,7 @@ const Room = () => {
                 </p>
               )}
               {messages.map((msg, idx) => (
-                <div
-                  key={idx}
-                  className={`chat-bubble ${msg.mine ? 'mine' : 'theirs'}`}
-                >
+                <div key={idx} className={`chat-bubble ${msg.mine ? 'mine' : 'theirs'}`}>
                   <div className="bubble-meta">
                     <span className="sender">{msg.user}</span>
                     <span className="time">{msg.time}</span>
@@ -609,7 +579,6 @@ const Room = () => {
                   <div className="bubble-text">{msg.text}</div>
                 </div>
               ))}
-              {/* Invisible anchor for auto-scroll */}
               <div ref={chatBottomRef} />
             </div>
             <form className="chat-input-area" onSubmit={handleSendMessage}>
@@ -619,49 +588,35 @@ const Room = () => {
                 value={newMessage}
                 onChange={e => setNewMessage(e.target.value)}
               />
-              <button type="submit" className="btn-send">
-                <FaPaperPlane />
-              </button>
+              <button type="submit" className="btn-send"><FaPaperPlane /></button>
             </form>
           </div>
         )}
 
-        {/* PARTICIPANTS TAB */}
         {activeTab === 'participants' && (
           <div className="panel-content people-mode">
-
-            {/* Local user (always first) */}
             <div className="person-row">
               <div className="person-info">
                 <div className="person-avatar">{userName.charAt(0).toUpperCase()}</div>
                 <span className="person-name">{userName} (You)</span>
               </div>
               <div className="person-status">
-                {videoOn
-                  ? <FaVideo className="icon-on" />
-                  : <FaVideoSlash className="icon-off" />}
-                {micOn
-                  ? <FaMicrophone className="icon-on" />
-                  : <FaMicrophoneSlash className="icon-off" />}
+                {videoOn ? <FaVideo className="icon-on" /> : <FaVideoSlash className="icon-off" />}
+                {micOn   ? <FaMicrophone className="icon-on" /> : <FaMicrophoneSlash className="icon-off" />}
               </div>
             </div>
 
-            {/* Remote peers */}
             {peers.map(({ peerId, peerName }) => (
               <div key={peerId} className="person-row">
                 <div className="person-info">
-                  <div className="person-avatar">
-                    {(peerName || 'P').charAt(0).toUpperCase()}
-                  </div>
+                  <div className="person-avatar">{(peerName || 'P').charAt(0).toUpperCase()}</div>
                   <span className="person-name">{peerName || 'Peer'}</span>
                 </div>
               </div>
             ))}
 
             <div className="invite-section">
-              <button className="btn-invite-link" onClick={copyRoomId}>
-                Copy Room ID
-              </button>
+              <button className="btn-invite-link" onClick={copyRoomId}>Copy Room ID</button>
             </div>
           </div>
         )}
