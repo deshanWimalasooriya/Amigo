@@ -1,1 +1,27 @@
-amigo-backend/.env
+# ============================================================
+# Amigo Root — .gitignore
+# ============================================================
+
+# --- SECURITY: NEVER commit environment files ---
+**/.env
+**/.env.local
+**/.env.*.local
+
+# Dependencies (should never be committed)
+**/node_modules/
+
+# Build outputs
+**/dist/
+**/dist-ssr/
+
+# Vite cache
+**/.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea/
