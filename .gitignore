@@ -25,3 +25,4 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .idea/
+amigo-backend/node_modules/.bin/nodemon

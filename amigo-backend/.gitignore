@@ -9,7 +9,7 @@
 # .env.example is safe to commit (contains no real secrets)
 
 # Dependencies
-node_modules/*
+./node_modules/*
 
 # Build output
 dist/
