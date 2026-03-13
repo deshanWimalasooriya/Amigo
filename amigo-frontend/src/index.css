@@ -1,18 +1,23 @@
-/* ───────────────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────
    Amigo — Global Styles
    Theme: Calm & Collaborative (Hybrid / Team Focus)
    Palette: Sage Green · Mint Blue · Beige · Soft Charcoal
-─────────────────────────────────────────────────────────────────── */
 
-/* 1. Tailwind directives ──────────────────────────────────────────── */
+   CORRECT ORDER (PostCSS rule — @import must precede everything):
+     1. @import          ← fonts / external sheets  ← FIRST
+     2. @tailwind        ← Tailwind base/components/utilities
+     3. :root / @layer  ← custom tokens and component classes
+───────────────────────────────────────────────────────────────────── */
+
+/* 1. @import — MUST be the very first statement ─────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* 2. Tailwind directives ──────────────────────────────────────────── */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* 2. Google Fonts ───────────────────────────────────────────────── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
-/* 3. CSS Design Tokens (Calm & Collaborative) ──────────────────── */
+/* 3. CSS Design Tokens (Calm & Collaborative) ────────────────────── */
 :root {
   /* Sage Green */
   --sage-50:  #f4f8f5;
@@ -51,18 +56,18 @@
   --charcoal-900: #353838;
   --charcoal-950: #1e2121;
 
-  /* Semantic */
-  --color-bg:          var(--beige-50);
-  --color-bg-card:     var(--beige-100);
-  --color-text:        var(--charcoal-900);
-  --color-text-muted:  var(--charcoal-500);
-  --color-border:      var(--beige-300);
-  --color-brand:       var(--sage-500);
-  --color-brand-light: var(--sage-100);
-  --color-accent:      var(--mint-500);
-  --color-accent-light:var(--mint-100);
+  /* Semantic aliases */
+  --color-bg:           var(--beige-50);
+  --color-bg-card:      var(--beige-100);
+  --color-text:         var(--charcoal-900);
+  --color-text-muted:   var(--charcoal-500);
+  --color-border:       var(--beige-300);
+  --color-brand:        var(--sage-500);
+  --color-brand-light:  var(--sage-100);
+  --color-accent:       var(--mint-500);
+  --color-accent-light: var(--mint-100);
 
-  /* Spacing rhythm */
+  /* Border radii */
   --radius-sm:  0.5rem;
   --radius-md:  0.875rem;
   --radius-lg:  1.25rem;
@@ -73,7 +78,7 @@
   --transition-slow: 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* 4. Base resets ───────────────────────────────────────────────── */
+/* 4. Base resets ─────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after { box-sizing: border-box; }
 
@@ -98,11 +103,8 @@
   a {
     @apply text-sage-600 no-underline transition-colors duration-200;
   }
-  a:hover {
-    @apply text-sage-500;
-  }
+  a:hover { @apply text-sage-500; }
 
-  /* Remove default button styles so Tailwind takes full control */
   button { @apply cursor-pointer; }
 
   /* Custom scrollbar — thin & calm */
@@ -118,7 +120,7 @@
   }
 }
 
-/* 5. Reusable component layer ───────────────────────────────────── */
+/* 5. Reusable component layer ────────────────────────────────────── */
 @layer components {
 
   /* — Buttons — */
@@ -166,12 +168,8 @@
     @apply card hover:shadow-card-hover hover:-translate-y-0.5
            hover:border-beige-400 cursor-pointer;
   }
-  .card-sage {
-    @apply bg-sage-50 border border-sage-200 rounded-2xl p-5;
-  }
-  .card-mint {
-    @apply bg-mint-50 border border-mint-200 rounded-2xl p-5;
-  }
+  .card-sage { @apply bg-sage-50 border border-sage-200 rounded-2xl p-5; }
+  .card-mint { @apply bg-mint-50 border border-mint-200 rounded-2xl p-5; }
 
   /* — Form inputs — */
   .input {
@@ -182,64 +180,40 @@
            focus:outline-none focus:ring-2 focus:ring-mint-400 focus:border-transparent
            transition-all duration-200;
   }
-  .input-label {
-    @apply block text-sm font-medium text-charcoal-700 mb-1.5;
-  }
-  .input-group {
-    @apply relative flex items-center;
-  }
-  .input-icon {
-    @apply absolute left-3.5 text-charcoal-400 text-sm pointer-events-none;
-  }
-  .input-with-icon {
-    @apply input pl-10;
-  }
+  .input-label      { @apply block text-sm font-medium text-charcoal-700 mb-1.5; }
+  .input-group      { @apply relative flex items-center; }
+  .input-icon       { @apply absolute left-3.5 text-charcoal-400 text-sm pointer-events-none; }
+  .input-with-icon  { @apply input pl-10; }
 
   /* — Badges — */
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-0.5
-           rounded-full text-xs font-semibold;
-  }
+  .badge       { @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold; }
   .badge-sage  { @apply badge bg-sage-100 text-sage-700; }
   .badge-mint  { @apply badge bg-mint-100 text-mint-700; }
   .badge-beige { @apply badge bg-beige-200 text-charcoal-700; }
   .badge-red   { @apply badge bg-red-100 text-red-700; }
 
   /* — Section headings — */
-  .section-title {
-    @apply text-lg font-display font-bold text-charcoal-800 tracking-tight;
-  }
-  .section-subtitle {
-    @apply text-sm text-charcoal-500 mt-0.5;
-  }
+  .section-title    { @apply text-lg font-display font-bold text-charcoal-800 tracking-tight; }
+  .section-subtitle { @apply text-sm text-charcoal-500 mt-0.5; }
 
   /* — Dividers — */
-  .divider {
-    @apply border-t border-beige-300 my-4;
-  }
-  .divider-vertical {
-    @apply border-l border-beige-300 mx-4 self-stretch;
-  }
+  .divider          { @apply border-t border-beige-300 my-4; }
+  .divider-vertical { @apply border-l border-beige-300 mx-4 self-stretch; }
 
-  /* — Navlink — */
+  /* — Nav links — */
   .nav-link {
     @apply flex items-center gap-2 px-3 py-2 rounded-xl
            text-sm font-medium text-charcoal-600
            hover:bg-sage-50 hover:text-sage-700
            transition-all duration-200;
   }
-  .nav-link-active {
-    @apply nav-link bg-sage-100 text-sage-700 font-semibold;
-  }
+  .nav-link-active { @apply nav-link bg-sage-100 text-sage-700 font-semibold; }
 
-  /* — Avatar — */
-  .avatar {
-    @apply rounded-full object-cover flex-shrink-0
-           ring-2 ring-beige-300;
-  }
-  .avatar-sm  { @apply avatar w-8  h-8; }
-  .avatar-md  { @apply avatar w-10 h-10; }
-  .avatar-lg  { @apply avatar w-14 h-14; }
+  /* — Avatars — */
+  .avatar    { @apply rounded-full object-cover flex-shrink-0 ring-2 ring-beige-300; }
+  .avatar-sm { @apply avatar w-8  h-8; }
+  .avatar-md { @apply avatar w-10 h-10; }
+  .avatar-lg { @apply avatar w-14 h-14; }
 
   /* — Skeleton loader — */
   .skeleton {
@@ -254,74 +228,41 @@
   }
 
   /* — Empty state — */
-  .empty-state {
-    @apply flex flex-col items-center justify-center
-           py-16 px-8 text-center;
-  }
-  .empty-icon {
-    @apply w-14 h-14 rounded-2xl bg-sage-100 text-sage-500
-           flex items-center justify-center text-2xl mb-4;
-  }
+  .empty-state { @apply flex flex-col items-center justify-center py-16 px-8 text-center; }
+  .empty-icon  { @apply w-14 h-14 rounded-2xl bg-sage-100 text-sage-500 flex items-center justify-center text-2xl mb-4; }
 
-  /* — Page layout helpers — */
-  .page-wrapper {
-    @apply min-h-screen bg-beige-50 flex flex-col;
-  }
-  .page-container {
-    @apply max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8;
-  }
-  .page-header {
-    @apply mb-8;
-  }
-  .page-title {
-    @apply text-2xl font-display font-bold text-charcoal-900 tracking-tight;
-  }
-  .page-desc {
-    @apply text-sm text-charcoal-500 mt-1;
-  }
+  /* — Page layout — */
+  .page-wrapper    { @apply min-h-screen bg-beige-50 flex flex-col; }
+  .page-container  { @apply max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8; }
+  .page-header     { @apply mb-8; }
+  .page-title      { @apply text-2xl font-display font-bold text-charcoal-900 tracking-tight; }
+  .page-desc       { @apply text-sm text-charcoal-500 mt-1; }
 
-  /* — Stat card — */
-  .stat-card {
-    @apply card flex flex-col gap-1;
-  }
-  .stat-value {
-    @apply text-3xl font-display font-bold text-charcoal-900;
-  }
-  .stat-label {
-    @apply text-xs font-medium text-charcoal-500 uppercase tracking-widest;
-  }
+  /* — Stat cards — */
+  .stat-card  { @apply card flex flex-col gap-1; }
+  .stat-value { @apply text-3xl font-display font-bold text-charcoal-900; }
+  .stat-label { @apply text-xs font-medium text-charcoal-500 uppercase tracking-widest; }
 
-  /* — Loading spinner — */
-  .spinner {
-    @apply inline-block w-5 h-5 rounded-full border-2
-           border-beige-300 border-t-sage-500 animate-spin;
-  }
+  /* — Spinner — */
+  .spinner { @apply inline-block w-5 h-5 rounded-full border-2 border-beige-300 border-t-sage-500 animate-spin; }
 
-  /* — Toast / Alert — */
-  .alert {
-    @apply flex items-start gap-3 px-4 py-3 rounded-xl text-sm;
-  }
-  .alert-error   { @apply alert bg-red-50   border border-red-200   text-red-700; }
-  .alert-success { @apply alert bg-sage-50  border border-sage-200  text-sage-700; }
-  .alert-info    { @apply alert bg-mint-50  border border-mint-200  text-mint-700; }
-  .alert-warn    { @apply alert bg-beige-100 border border-beige-400 text-charcoal-700; }
+  /* — Alerts — */
+  .alert         { @apply flex items-start gap-3 px-4 py-3 rounded-xl text-sm; }
+  .alert-error   { @apply alert bg-red-50    border border-red-200    text-red-700; }
+  .alert-success { @apply alert bg-sage-50   border border-sage-200   text-sage-700; }
+  .alert-info    { @apply alert bg-mint-50   border border-mint-200   text-mint-700; }
+  .alert-warn    { @apply alert bg-beige-100 border border-beige-400  text-charcoal-700; }
 }
 
-/* 6. Utility layer extras ────────────────────────────────────────────── */
+/* 6. Utility extras ──────────────────────────────────────────────── */
 @layer utilities {
   .text-gradient-sage {
     @apply bg-clip-text text-transparent;
     background-image: linear-gradient(135deg, #5a8f67 0%, #2d9ea1 100%);
   }
-  .bg-gradient-sage {
-    background-image: linear-gradient(135deg, #5a8f67 0%, #7dab87 100%);
-  }
-  .bg-gradient-mint {
-    background-image: linear-gradient(135deg, #2d9ea1 0%, #47b9bc 100%);
-  }
-  .bg-gradient-warm {
-    background-image: linear-gradient(135deg, #f9f6ef 0%, #f2ebe0 100%);
-  }
+  .bg-gradient-sage  { background-image: linear-gradient(135deg, #5a8f67 0%, #7dab87 100%); }
+  .bg-gradient-mint  { background-image: linear-gradient(135deg, #2d9ea1 0%, #47b9bc 100%); }
+  .bg-gradient-warm  { background-image: linear-gradient(135deg, #f9f6ef 0%, #f2ebe0 100%); }
   .bg-hero {
     background-image:
       radial-gradient(ellipse 60% 50% at 10% 30%, rgba(90,143,103,0.10) 0%, transparent 70%),
@@ -331,5 +272,3 @@
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
-
-/* 7. Keep backward-compat — old CSS modules still load fine next to Tailwind */
