@@ -1,48 +1,98 @@
 import React, { useEffect, useState } from 'react';
 import Header from '../components/Header';
-import { FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop, FaEllipsisH } from 'react-icons/fa';
-import './styles/Dashboard.css';
-import { useNavigate } from 'react-router-dom';
 import Footer from '../components/Footer';
+import {
+  FaVideo, FaKeyboard, FaCalendarPlus, FaDesktop,
+  FaEllipsisH, FaChevronDown, FaClock, FaHistory,
+  FaUsers, FaCheckCircle,
+} from 'react-icons/fa';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { meetingAPI } from '../services/api';
+import { getAvatarGradient } from '../design-tokens';
 
-const FaChevronDown = () => (
-  <svg width="10" height="6" viewBox="0 0 10 6" fill="none">
-    <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5"
-      strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
-// Format a UTC ISO date to a readable "Today 2:30 PM" style string
+// ── Helpers ─────────────────────────────────────────────────────────
 const formatMeetingTime = (isoDate) => {
   if (!isoDate) return 'Instant';
-  const d = new Date(isoDate);
+  const d   = new Date(isoDate);
   const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
-  const isTomorrow = d.toDateString() ===
-    new Date(now.getTime() + 86400000).toDateString();
-  const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+  const isToday    = d.toDateString() === now.toDateString();
+  const isTomorrow = d.toDateString() === new Date(now.getTime() + 86400000).toDateString();
+  const timeStr    = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   if (isToday)    return `Today ${timeStr}`;
   if (isTomorrow) return `Tomorrow ${timeStr}`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${timeStr}`;
 };
 
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 12) return 'Good Morning';
+  if (h < 17) return 'Good Afternoon';
+  return 'Good Evening';
+};
+
+const getGreetingEmoji = () => {
+  const h = new Date().getHours();
+  if (h < 12) return '☀️';
+  if (h < 17) return '👋';
+  return '🌙';
+};
+
+// ── Skeleton row ─────────────────────────────────────────────────────
+const SkeletonRow = () => (
+  <div className="flex items-center gap-4 py-3 border-b border-beige-200 animate-pulse">
+    <div className="w-12 h-10 rounded-xl bg-beige-200" />
+    <div className="flex-1 space-y-2">
+      <div className="h-3.5 bg-beige-200 rounded w-2/3" />
+      <div className="h-3 bg-beige-200 rounded w-1/3" />
+    </div>
+    <div className="w-16 h-8 bg-beige-200 rounded-xl" />
+  </div>
+);
+
+// ── Quick-action card data ───────────────────────────────────────────
+const QUICK_ACTIONS = [
+  {
+    icon:  <FaKeyboard />,
+    label: 'Join with Code',
+    sub:   'Enter room ID',
+    path:  '/join',
+    iconBg: 'bg-mint-100 text-mint-600',
+  },
+  {
+    icon:  <FaCalendarPlus />,
+    label: 'Schedule',
+    sub:   'Calendar',
+    path:  '/schedule-meeting',
+    iconBg: 'bg-sage-100 text-sage-600',
+  },
+  {
+    icon:  <FaDesktop />,
+    label: 'Share Screen',
+    sub:   'Present now',
+    path:  null,
+    iconBg: 'bg-beige-300 text-charcoal-600',
+  },
+];
+
+// ───────────────────────────────────────────────────────────────────────
 const Dashboard = () => {
   const navigate   = useNavigate();
   const { user }   = useAuth();
 
-  const [stats,    setStats]    = useState({ totalHosted: 0, upcoming: 0, ended: 0, recentMeetings: [] });
-  const [upcoming, setUpcoming] = useState([]);
-  const [history,  setHistory]  = useState([]);
-  const [loadingSt, setLoadingSt] = useState(true);
+  const [stats,     setStats]     = useState({ totalHosted: 0, upcoming: 0, ended: 0 });
+  const [upcoming,  setUpcoming]  = useState([]);
+  const [history,   setHistory]   = useState([]);
+  const [loading,   setLoading]   = useState(true);
+
+  const firstName = user?.fullName?.split(' ')[0] || 'there';
+  const greeting  = getGreeting();
+  const emoji     = getGreetingEmoji();
+  const avatarGrad = getAvatarGradient(user?.id ?? 0);
 
   const currentDate = new Date().toLocaleDateString('en-US', {
     weekday: 'long', day: 'numeric', month: 'long',
   });
-  const firstName = user?.fullName?.split(' ')[0] || 'there';
-  const hour      = new Date().getHours();
-  const greeting  = hour < 12 ? 'Good Morning' : hour < 17 ? 'Good Afternoon' : 'Good Evening';
 
   useEffect(() => {
     const load = async () => {
@@ -54,116 +104,171 @@ const Dashboard = () => {
         ]);
         setStats(statsData);
         setUpcoming(upcomingData);
-        setHistory(historyData.slice(0, 3)); // only 3 recent for sidebar
+        setHistory(historyData.slice(0, 4));
       } catch (err) {
         console.error('Dashboard load error:', err.message);
       } finally {
-        setLoadingSt(false);
+        setLoading(false);
       }
     };
     load();
   }, []);
 
-  const handleStartMeeting = async (roomId) => {
+  const handleStart = async (roomId, meetingId, meetingTitle) => {
     try {
       await meetingAPI.start(roomId);
-      navigate(`/room/${roomId}`, { state: { isHost: true } });
+      navigate(`/room/${roomId}`, {
+        state: { isHost: true, meetingId, title: meetingTitle, userName: user?.fullName || 'Host' },
+      });
     } catch (err) {
       console.error(err.message);
     }
   };
 
   return (
-    <div className="dashboard-wrapper">
+    <div className="page-wrapper">
       <Header />
-      <main className="dashboard-content">
 
-        {/* 1. Welcome Banner */}
-        <section className="welcome-banner">
-          <div className="welcome-info">
-            <h1>{greeting}, {firstName} 👋</h1>
-            <p className="date-text">
-              {currentDate}
-              {stats.upcoming > 0
-                ? ` • You have ${stats.upcoming} upcoming meeting${stats.upcoming > 1 ? 's' : ''}`
-                : ' • No upcoming meetings today'}
-            </p>
+      <main className="flex-1 page-container py-8 space-y-8">
+
+        {/* ── 1. Welcome Banner ── */}
+        <section className="flex flex-col sm:flex-row sm:items-center justify-between gap-6
+                            bg-gradient-to-br from-sage-50 via-beige-100 to-mint-50
+                            border border-beige-300 rounded-3xl p-6 sm:p-8 shadow-card">
+
+          {/* Left: greeting */}
+          <div className="flex items-center gap-4">
+            <div
+              className="w-14 h-14 rounded-2xl flex items-center justify-center
+                         text-white text-xl font-bold flex-shrink-0 shadow-sage-sm"
+              style={{ background: avatarGrad }}
+            >
+              {user?.fullName?.charAt(0).toUpperCase() || 'U'}
+            </div>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-display font-bold text-charcoal-900">
+                {greeting}, {firstName} {emoji}
+              </h1>
+              <p className="text-sm text-charcoal-500 mt-0.5">
+                {currentDate}
+                {stats.upcoming > 0
+                  ? ` • ${stats.upcoming} upcoming meeting${stats.upcoming > 1 ? 's' : ''}`
+                  : ' • No upcoming meetings today'}
+              </p>
+            </div>
           </div>
-          <div className="primary-action" onClick={() => navigate('/new-meeting')}>
-            <button className="btn-new-meeting">
-              <FaVideo className="btn-icon" /> New Meeting
+
+          {/* Right: New Meeting button */}
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button
+              className="btn-primary rounded-r-none px-5"
+              onClick={() => navigate('/new-meeting')}
+            >
+              <FaVideo /> New Meeting
             </button>
-            <div className="split-line"></div>
-            <button className="btn-dropdown"><FaChevronDown /></button>
+            <button
+              className="btn-primary rounded-l-none px-3 border-l border-sage-400"
+              title="More options"
+            >
+              <FaChevronDown className="text-[10px]" />
+            </button>
           </div>
         </section>
 
-        {/* 2. Quick Actions */}
-        <section className="quick-actions">
-          <div className="action-card" onClick={() => navigate('/join')}>
-            <div className="icon-box blue"><FaKeyboard /></div>
-            <div className="action-details"><h3>Join with Code</h3><p>Enter ID</p></div>
-          </div>
-          <div className="action-card" onClick={() => navigate('/schedule-meeting')}>
-            <div className="icon-box purple"><FaCalendarPlus /></div>
-            <div className="action-details"><h3>Schedule</h3><p>Calendar</p></div>
-          </div>
-          <div className="action-card">
-            <div className="icon-box teal"><FaDesktop /></div>
-            <div className="action-details"><h3>Share Screen</h3><p>Present</p></div>
-          </div>
+        {/* ── 2. Stats Row ── */}
+        <section className="grid grid-cols-3 gap-4">
+          {[
+            { label: 'Hosted',   value: stats.totalHosted ?? 0, icon: <FaVideo />,       color: 'text-sage-500',    bg: 'bg-sage-100' },
+            { label: 'Upcoming', value: stats.upcoming    ?? 0, icon: <FaClock />,       color: 'text-mint-600',    bg: 'bg-mint-100' },
+            { label: 'Ended',    value: stats.ended       ?? 0, icon: <FaCheckCircle />, color: 'text-charcoal-500',bg: 'bg-beige-200' },
+          ].map(({ label, value, icon, color, bg }) => (
+            <div key={label} className="stat-card">
+              <div className={`w-9 h-9 rounded-xl ${bg} ${color} flex items-center justify-center text-sm mb-2`}>
+                {icon}
+              </div>
+              <p className="stat-value">{loading ? <span className="skeleton inline-block w-8 h-7 rounded" /> : value}</p>
+              <p className="stat-label">{label}</p>
+            </div>
+          ))}
         </section>
 
-        {/* 3. Main Data Area */}
-        <div className="data-split-view">
+        {/* ── 3. Quick Actions ── */}
+        <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {QUICK_ACTIONS.map(({ icon, label, sub, path, iconBg }) => (
+            <button
+              key={label}
+              onClick={() => path && navigate(path)}
+              className="card-hover flex items-center gap-4 text-left"
+            >
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-lg flex-shrink-0 ${iconBg}`}>
+                {icon}
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-charcoal-800">{label}</p>
+                <p className="text-xs text-charcoal-500 mt-0.5">{sub}</p>
+              </div>
+            </button>
+          ))}
+        </section>
 
-          {/* Upcoming Meetings Table */}
-          <section className="data-section main-table">
-            <div className="section-header">
-              <h2>Upcoming Meetings</h2>
-              <span className="view-all" style={{ cursor: 'pointer' }}
-                onClick={() => navigate('/meetings')}>View All</span>
+        {/* ── 4. Data Split View ── */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Upcoming Meetings — 2/3 width */}
+          <section className="card lg:col-span-2">
+            <div className="flex items-center justify-between mb-5 pb-4 border-b border-beige-300">
+              <div>
+                <h2 className="section-title">Upcoming Meetings</h2>
+                <p className="section-subtitle">Your next sessions</p>
+              </div>
+              <button
+                className="text-xs font-semibold text-sage-600 hover:text-sage-700 transition-colors"
+                onClick={() => navigate('/meetings')}
+              >
+                View All →
+              </button>
             </div>
 
-            {loadingSt ? (
-              <p style={{ color: '#64748b', padding: '1rem' }}>Loading...</p>
+            {loading ? (
+              <div className="space-y-1">
+                <SkeletonRow /><SkeletonRow /><SkeletonRow />
+              </div>
             ) : upcoming.length === 0 ? (
-              <div style={{ padding: '1.5rem', color: '#64748b', textAlign: 'center' }}>
-                <p>No upcoming meetings.</p>
-                <button
-                  className="btn-start-small"
-                  style={{ marginTop: '0.5rem' }}
-                  onClick={() => navigate('/schedule-meeting')}
-                >
-                  Schedule One
+              <div className="empty-state">
+                <div className="empty-icon"><FaClock /></div>
+                <p className="text-sm font-semibold text-charcoal-700">No upcoming meetings</p>
+                <p className="text-xs text-charcoal-500 mt-1 mb-4">Schedule one and it'll appear here</p>
+                <button className="btn-secondary text-xs" onClick={() => navigate('/schedule-meeting')}>
+                  <FaCalendarPlus /> Schedule a Meeting
                 </button>
               </div>
             ) : (
-              <div className="meeting-table">
-                {upcoming.slice(0, 3).map((m) => {
+              <div className="divide-y divide-beige-200">
+                {upcoming.slice(0, 4).map((m) => {
                   const d = m.scheduledAt ? new Date(m.scheduledAt) : null;
                   const timeStr = d
                     ? d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
                     : 'Now';
                   const [timePart, ampm] = timeStr.split(' ');
                   return (
-                    <div className="table-row" key={m.id}>
-                      <div className="time-col">
-                        <span className="time-large">{timePart}</span>
-                        <span className="time-am-pm">{ampm}</span>
+                    <div key={m.id} className="flex items-center gap-4 py-3.5">
+                      {/* Time block */}
+                      <div className="flex flex-col items-center min-w-[52px] bg-beige-100 rounded-xl px-2 py-1.5">
+                        <span className="text-base font-bold text-charcoal-900 leading-none">{timePart}</span>
+                        <span className="text-[10px] font-semibold text-charcoal-400 uppercase tracking-wide mt-0.5">{ampm || 'NOW'}</span>
                       </div>
-                      <div className="info-col">
-                        <h4>{m.title}</h4>
-                        <p>ID: {m.roomId} &bull; {m.duration} min</p>
+                      {/* Info */}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-charcoal-800 truncate">{m.title}</p>
+                        <p className="text-xs text-charcoal-500 mt-0.5">ID: {m.roomId} &bull; {m.duration} min</p>
                       </div>
-                      <div className="action-col">
-                        <button
-                          className="btn-start-small"
-                          onClick={() => handleStartMeeting(m.roomId)}
-                        >
-                          Start
-                        </button>
-                      </div>
+                      {/* Action */}
+                      <button
+                        className="btn-primary text-xs px-4 py-2 flex-shrink-0"
+                        onClick={() => handleStart(m.roomId, m.id, m.title)}
+                      >
+                        Start
+                      </button>
                     </div>
                   );
                 })}
@@ -171,34 +276,81 @@ const Dashboard = () => {
             )}
           </section>
 
-          {/* Recent History Sidebar */}
-          <aside className="data-section side-list">
-            <div className="section-header">
-              <h2>Recent History</h2>
-              <FaEllipsisH className="more-options" style={{ cursor: 'pointer' }}
-                onClick={() => navigate('/history')} />
+          {/* Recent History — 1/3 width */}
+          <aside className="card">
+            <div className="flex items-center justify-between mb-5 pb-4 border-b border-beige-300">
+              <div>
+                <h2 className="section-title">Recent History</h2>
+                <p className="section-subtitle">Past meetings</p>
+              </div>
+              <button
+                className="btn-icon w-7 h-7"
+                onClick={() => navigate('/history')}
+                title="View all history"
+              >
+                <FaEllipsisH className="text-xs" />
+              </button>
             </div>
 
-            {loadingSt ? (
-              <p style={{ color: '#64748b', padding: '1rem' }}>Loading...</p>
-            ) : history.length === 0 ? (
-              <p style={{ color: '#64748b', padding: '1rem' }}>No past meetings yet.</p>
-            ) : (
-              <div className="history-list-compact">
-                {history.map((m) => (
-                  <div className="history-row" key={m.id}>
-                    <div className="status-dot"></div>
-                    <div className="history-meta">
-                      <h4>{m.title}</h4>
-                      <span>{formatMeetingTime(m.endedAt)}</span>
+            {loading ? (
+              <div className="space-y-3">
+                {[1,2,3].map(i => (
+                  <div key={i} className="flex gap-3 animate-pulse">
+                    <div className="w-2 h-2 rounded-full bg-beige-300 mt-1.5 flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <div className="h-3 bg-beige-200 rounded w-3/4" />
+                      <div className="h-2.5 bg-beige-200 rounded w-1/2" />
                     </div>
                   </div>
                 ))}
               </div>
+            ) : history.length === 0 ? (
+              <div className="empty-state py-10">
+                <div className="empty-icon"><FaHistory /></div>
+                <p className="text-xs text-charcoal-500">No past meetings yet</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {history.map((m) => (
+                  <div key={m.id} className="flex items-start gap-3">
+                    <div className="w-2 h-2 rounded-full bg-mint-400 mt-1.5 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-charcoal-800 truncate">{m.title}</p>
+                      <p className="text-xs text-charcoal-500 mt-0.5">{formatMeetingTime(m.endedAt)}</p>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  className="text-xs text-sage-600 hover:text-sage-700 font-semibold mt-2 transition-colors"
+                  onClick={() => navigate('/history')}
+                >
+                  View all history →
+                </button>
+              </div>
             )}
           </aside>
         </div>
+
+        {/* ── 5. Team quick-peek (optional bottom strip) ── */}
+        <section
+          className="card-sage flex flex-col sm:flex-row items-center justify-between gap-4 cursor-pointer
+                     hover:border-sage-300 transition-colors"
+          onClick={() => navigate('/team')}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-sage-200 text-sage-700 flex items-center justify-center">
+              <FaUsers />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-charcoal-800">Your Team</p>
+              <p className="text-xs text-charcoal-500">View members, invite colleagues</p>
+            </div>
+          </div>
+          <span className="text-xs font-semibold text-sage-600">→ Open Team</span>
+        </section>
+
       </main>
+
       <Footer />
     </div>
   );
