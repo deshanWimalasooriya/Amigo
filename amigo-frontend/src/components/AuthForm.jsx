@@ -1,233 +1,246 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
-import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
+import {
+  FaEnvelope, FaLock, FaUser, FaEye, FaEyeSlash,
+  FaVideo, FaArrowRight, FaLeaf,
+} from 'react-icons/fa';
 import { useAuth } from '../context/AuthContext';
-import './styles/AuthForm.css';
-
-const API = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const AuthForm = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, register } = useAuth();
 
-  const [isLogin, setIsLogin] = useState(true);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
+  const [mode,      setMode]      = useState('login');   // 'login' | 'register'
+  const [showPass,  setShowPass]  = useState(false);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [success,   setSuccess]   = useState('');
 
   const [formData, setFormData] = useState({
     fullName: '',
-    email: '',
+    email:    '',
     password: '',
-    confirmPassword: '',
   });
 
-  const handleChange = (e) => {
-    setError(''); // clear error on any keystroke
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const toggleMode = () => {
-    setIsLogin(prev => !prev);
-    setError('');
-    setFormData(prev => ({ ...prev, password: '', confirmPassword: '' }));
-  };
+  const handleChange = (e) =>
+    setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setError('');
-
-    // ── Client-side validation ──
-    if (!formData.email || !formData.password) {
-      setError('Email and password are required.');
-      return;
-    }
-
-    if (!isLogin) {
-      if (!formData.fullName.trim()) {
-        setError('Full name is required.');
-        return;
-      }
-      if (formData.password.length < 6) {
-        setError('Password must be at least 6 characters.');
-        return;
-      }
-      if (formData.password !== formData.confirmPassword) {
-        setError('Passwords do not match.');
-        return;
-      }
-    }
-
-    // ── Call the real backend API ──
+    setError(''); setSuccess('');
     setLoading(true);
     try {
-      const endpoint = isLogin ? '/api/auth/login' : '/api/auth/register';
-      const body = isLogin
-        ? { email: formData.email, password: formData.password }
-        : { fullName: formData.fullName, email: formData.email, password: formData.password };
-
-      const res = await fetch(`${API}${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include', // receive the httpOnly JWT cookie
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        // Show the exact error message from the backend
-        setError(data.message || 'Something went wrong. Please try again.');
-        return;
+      if (mode === 'login') {
+        await login({ email: formData.email, password: formData.password });
+        navigate('/dashboard');
+      } else {
+        await register({
+          fullName: formData.fullName,
+          email:    formData.email,
+          password: formData.password,
+        });
+        setSuccess('Account created! Redirecting...');
+        setTimeout(() => navigate('/dashboard'), 1200);
       }
-
-      // ── Success: store user in global context, redirect ──
-      login(data);
-      navigate('/dashboard');
     } catch (err) {
-      setError('Cannot connect to server. Is the backend running?');
+      setError(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-card-glass">
-      <div className="auth-header">
-        <h2>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
-        <p>
-          {isLogin
-            ? 'Enter your details to access your meetings.'
-            : 'Join Amigo to start connecting with the world.'}
-        </p>
+    <div className="min-h-screen bg-hero flex">
+
+      {/* ── LEFT — Brand panel (hidden on mobile) ── */}
+      <div className="hidden lg:flex flex-col justify-between w-[42%] bg-gradient-sage p-12 relative overflow-hidden">
+        {/* Decorative circles */}
+        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-white/5" />
+        <div className="absolute bottom-24 -right-20 w-80 h-80 rounded-full bg-white/5" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-white/3" />
+
+        {/* Logo */}
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center">
+            <FaVideo className="text-white text-base" />
+          </div>
+          <span className="font-display font-bold text-xl text-white tracking-tight">Amigo</span>
+        </div>
+
+        {/* Hero text */}
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-6">
+            <FaLeaf className="text-white/70 text-sm" />
+            <span className="text-white/70 text-sm font-medium tracking-wide">Calm. Collaborative. Connected.</span>
+          </div>
+          <h1 className="font-display font-bold text-4xl text-white leading-tight mb-4">
+            Your team's meeting space, reimagined
+          </h1>
+          <p className="text-white/75 text-base leading-relaxed max-w-xs">
+            A distraction-free environment designed to reduce meeting fatigue and help your team do their best work.
+          </p>
+
+          {/* Feature chips */}
+          <div className="flex flex-wrap gap-2 mt-8">
+            {['HD Video', 'Screen Share', 'Chat', 'Recordings', 'Team Spaces'].map(f => (
+              <span
+                key={f}
+                className="px-3 py-1 rounded-full bg-white/15 text-white text-xs font-medium backdrop-blur-sm"
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Testimonial */}
+        <div className="relative z-10 bg-white/10 backdrop-blur-sm rounded-2xl p-5">
+          <p className="text-white/90 text-sm leading-relaxed">
+            "Amigo changed how our remote team collaborates. The calm interface genuinely reduces meeting stress."
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">SK</div>
+            <div>
+              <p className="text-white text-xs font-semibold">Sarah Kim</p>
+              <p className="text-white/60 text-[11px]">Head of Engineering, NovaTech</p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Error Banner */}
-      {error && (
-        <div style={{
-          background: 'rgba(239,68,68,0.15)',
-          border: '1px solid #ef4444',
-          borderRadius: '8px',
-          padding: '10px 14px',
-          marginBottom: '16px',
-          color: '#fca5a5',
-          fontSize: '0.875rem',
-        }}>
-          {error}
-        </div>
-      )}
+      {/* ── RIGHT — Auth form ── */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12">
+        <div className="w-full max-w-md animate-slide-up">
 
-      <form onSubmit={handleSubmit} className="auth-form-container">
-
-        {/* Full Name — Register only */}
-        <AnimatePresence>
-          {!isLogin && (
-            <motion.div
-              key="fullname-field"
-              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
-              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{ overflow: 'hidden' }}
-            >
-              <div className="input-group" style={{ marginBottom: 0 }}>
-                <FaUser className="input-icon" />
-                <input
-                  type="text"
-                  name="fullName"
-                  placeholder="Full Name"
-                  value={formData.fullName}
-                  onChange={handleChange}
-                  required={!isLogin}
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {/* Email */}
-        <div className="input-group">
-          <FaEnvelope className="input-icon" />
-          <input
-            type="email"
-            name="email"
-            placeholder="Email Address"
-            value={formData.email}
-            onChange={handleChange}
-            required
-            autoComplete="email"
-          />
-        </div>
-
-        {/* Password */}
-        <div className="input-group">
-          <FaLock className="input-icon" />
-          <input
-            type="password"
-            name="password"
-            placeholder="Password"
-            value={formData.password}
-            onChange={handleChange}
-            required
-            autoComplete={isLogin ? 'current-password' : 'new-password'}
-          />
-        </div>
-
-        {/* Confirm Password — Register only */}
-        <AnimatePresence>
-          {!isLogin && (
-            <motion.div
-              key="confirm-field"
-              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
-              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
-              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
-              transition={{ duration: 0.3 }}
-              style={{ overflow: 'hidden' }}
-            >
-              <div className="input-group" style={{ marginBottom: 0 }}>
-                <FaLock className="input-icon" />
-                <input
-                  type="password"
-                  name="confirmPassword"
-                  placeholder="Confirm Password"
-                  value={formData.confirmPassword}
-                  onChange={handleChange}
-                  required={!isLogin}
-                  autoComplete="new-password"
-                />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-
-        {isLogin && (
-          <div className="forgot-pass">
-            <a href="#">Forgot Password?</a>
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-xl bg-gradient-sage flex items-center justify-center">
+              <FaVideo className="text-white text-sm" />
+            </div>
+            <span className="font-display font-bold text-lg text-charcoal-900">Amigo</span>
           </div>
-        )}
 
-        <button type="submit" className="btn-submit-gradient" disabled={loading}>
-          {loading
-            ? (isLogin ? 'Signing in...' : 'Creating account...')
-            : (<>{isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight style={{ marginLeft: 8 }} /></>)
-          }
-        </button>
+          {/* Card */}
+          <div className="card p-8">
 
-        <div className="divider"><span>OR</span></div>
+            {/* Heading */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-display font-bold text-charcoal-900">
+                {mode === 'login' ? 'Welcome back' : 'Create account'}
+              </h2>
+              <p className="text-sm text-charcoal-500 mt-1.5">
+                {mode === 'login'
+                  ? 'Sign in to your Amigo workspace'
+                  : 'Join thousands of calm collaborators'}
+              </p>
+            </div>
 
-        <div className="social-login">
-          <button type="button" className="social-btn"><FaGoogle /> Google</button>
-          <button type="button" className="social-btn"><FaGithub /> GitHub</button>
+            {/* Alerts */}
+            {error   && <div className="alert-error mb-5 text-sm">{error}</div>}
+            {success && <div className="alert-success mb-5 text-sm">{success}</div>}
+
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+
+              {/* Full name (register only) */}
+              {mode === 'register' && (
+                <div>
+                  <label className="input-label">Full Name</label>
+                  <div className="input-group">
+                    <FaUser className="input-icon" />
+                    <input
+                      type="text"
+                      name="fullName"
+                      value={formData.fullName}
+                      onChange={handleChange}
+                      className="input-with-icon"
+                      placeholder="Jane Smith"
+                      required
+                      autoFocus
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Email */}
+              <div>
+                <label className="input-label">Email Address</label>
+                <div className="input-group">
+                  <FaEnvelope className="input-icon" />
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    className="input-with-icon"
+                    placeholder="you@amigo.com"
+                    required
+                    autoFocus={mode === 'login'}
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="input-label mb-0">Password</label>
+                  {mode === 'login' && (
+                    <button type="button" className="text-xs text-mint-600 hover:text-mint-700 font-medium">
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="input-group">
+                  <FaLock className="input-icon" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="input-with-icon pr-10"
+                    placeholder={mode === 'register' ? 'Min. 8 characters' : 'Your password'}
+                    required
+                    minLength={mode === 'register' ? 8 : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPass(p => !p)}
+                    className="absolute right-3.5 text-charcoal-400 hover:text-charcoal-600 transition-colors"
+                  >
+                    {showPass ? <FaEyeSlash className="text-sm" /> : <FaEye className="text-sm" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Submit */}
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary w-full justify-center mt-1 py-3 text-base"
+              >
+                {loading ? (
+                  <span className="spinner border-white/30 border-t-white" />
+                ) : (
+                  <>
+                    {mode === 'login' ? 'Sign In' : 'Create Account'}
+                    <FaArrowRight className="text-xs" />
+                  </>
+                )}
+              </button>
+            </form>
+
+            {/* Mode toggle */}
+            <p className="text-center text-sm text-charcoal-500 mt-6">
+              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <button
+                type="button"
+                onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); }}
+                className="text-sage-600 font-semibold hover:text-sage-700 transition-colors"
+              >
+                {mode === 'login' ? 'Sign up free' : 'Sign in'}
+              </button>
+            </p>
+          </div>
         </div>
-      </form>
-
-      <div className="auth-footer">
-        <p>
-          {isLogin ? "Don't have an account? " : 'Already have an account? '}
-          <span onClick={toggleMode} className="toggle-link">
-            {isLogin ? 'Register' : 'Login'}
-          </span>
-        </p>
       </div>
     </div>
   );

@@ -1,28 +1,335 @@
+/* ───────────────────────────────────────────────────────────────────
+   Amigo — Global Styles
+   Theme: Calm & Collaborative (Hybrid / Team Focus)
+   Palette: Sage Green · Mint Blue · Beige · Soft Charcoal
+─────────────────────────────────────────────────────────────────── */
+
+/* 1. Tailwind directives ──────────────────────────────────────────── */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 2. Google Fonts ───────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* 3. CSS Design Tokens (Calm & Collaborative) ──────────────────── */
 :root {
-  font-family: Inter, system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-  
-  /* Color Scheme Variables */
-  --bg-primary: #0f172a;
-  --text-primary: #ffffff;
+  /* Sage Green */
+  --sage-50:  #f4f8f5;
+  --sage-100: #e6f0e8;
+  --sage-200: #cde1d2;
+  --sage-300: #a8c9af;
+  --sage-400: #7dab87;
+  --sage-500: #5a8f67;   /* brand primary */
+  --sage-600: #477356;
+  --sage-700: #3a5c45;
+  --sage-800: #304a39;
+  --sage-900: #293e30;
+
+  /* Mint Blue */
+  --mint-50:  #f0fafa;
+  --mint-100: #d9f3f3;
+  --mint-200: #b6e8e8;
+  --mint-300: #82d5d6;
+  --mint-400: #47b9bc;
+  --mint-500: #2d9ea1;   /* accent / focus */
+  --mint-600: #277f83;
+  --mint-700: #246568;
+
+  /* Beige / Warm Neutral */
+  --beige-50:  #fdfcf8;
+  --beige-100: #f9f6ef;
+  --beige-200: #f2ebe0;
+  --beige-300: #e8dcc8;
+  --beige-400: #d9c9aa;
+  --beige-500: #c9b590;
+
+  /* Soft Charcoal */
+  --charcoal-500: #5f6566;
+  --charcoal-700: #454949;
+  --charcoal-800: #3c3f3f;
+  --charcoal-900: #353838;
+  --charcoal-950: #1e2121;
+
+  /* Semantic */
+  --color-bg:          var(--beige-50);
+  --color-bg-card:     var(--beige-100);
+  --color-text:        var(--charcoal-900);
+  --color-text-muted:  var(--charcoal-500);
+  --color-border:      var(--beige-300);
+  --color-brand:       var(--sage-500);
+  --color-brand-light: var(--sage-100);
+  --color-accent:      var(--mint-500);
+  --color-accent-light:var(--mint-100);
+
+  /* Spacing rhythm */
+  --radius-sm:  0.5rem;
+  --radius-md:  0.875rem;
+  --radius-lg:  1.25rem;
+  --radius-xl:  1.75rem;
+
+  /* Transitions */
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 350ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* FIX: Changed 'overflow: hidden' to 'auto' to allow scrolling globally */
-html, body {
-  margin: 0;
-  padding: 0;
-  width: 100%;
-  min-height: 100vh; /* Changed height to min-height */
-  overflow: auto;    /* FIX: Allows scrolling by default */
-  background-color: var(--bg-primary);
+/* 4. Base resets ───────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
+  html {
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    scroll-behavior: smooth;
+    height: 100%;
+  }
+
+  body {
+    @apply font-sans text-charcoal-900 bg-beige-50;
+    min-height: 100vh;
+    line-height: 1.6;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-semibold text-charcoal-900 leading-tight;
+  }
+
+  a {
+    @apply text-sage-600 no-underline transition-colors duration-200;
+  }
+  a:hover {
+    @apply text-sage-500;
+  }
+
+  /* Remove default button styles so Tailwind takes full control */
+  button { @apply cursor-pointer; }
+
+  /* Custom scrollbar — thin & calm */
+  ::-webkit-scrollbar       { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-beige-100 rounded-full; }
+  ::-webkit-scrollbar-thumb { @apply bg-sage-300 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-sage-400; }
+
+  /* Focus ring — mint for keyboard nav */
+  :focus-visible {
+    outline: 2px solid var(--mint-500);
+    outline-offset: 2px;
+  }
 }
 
-#root {
-  width: 100%;
-  min-height: 100vh;
+/* 5. Reusable component layer ───────────────────────────────────── */
+@layer components {
+
+  /* — Buttons — */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2
+           px-5 py-2.5 rounded-xl font-semibold text-sm
+           transition-all duration-200 select-none;
+  }
+  .btn-primary {
+    @apply btn bg-sage-500 text-white
+           hover:bg-sage-600 active:bg-sage-700
+           shadow-sage-sm hover:shadow-sage-md;
+  }
+  .btn-secondary {
+    @apply btn bg-beige-100 text-charcoal-800 border border-beige-300
+           hover:bg-beige-200 hover:border-beige-400;
+  }
+  .btn-accent {
+    @apply btn bg-mint-500 text-white
+           hover:bg-mint-600 active:bg-mint-700
+           shadow-mint-md;
+  }
+  .btn-ghost {
+    @apply btn bg-transparent text-charcoal-600
+           hover:bg-beige-100;
+  }
+  .btn-danger {
+    @apply btn bg-red-500 text-white
+           hover:bg-red-600 shadow-sm;
+  }
+  .btn-icon {
+    @apply inline-flex items-center justify-center
+           w-9 h-9 rounded-xl text-charcoal-500
+           hover:bg-beige-200 hover:text-charcoal-700
+           transition-all duration-200;
+  }
+
+  /* — Cards — */
+  .card {
+    @apply bg-beige-100 border border-beige-300
+           rounded-2xl shadow-card p-5
+           transition-all duration-200;
+  }
+  .card-hover {
+    @apply card hover:shadow-card-hover hover:-translate-y-0.5
+           hover:border-beige-400 cursor-pointer;
+  }
+  .card-sage {
+    @apply bg-sage-50 border border-sage-200 rounded-2xl p-5;
+  }
+  .card-mint {
+    @apply bg-mint-50 border border-mint-200 rounded-2xl p-5;
+  }
+
+  /* — Form inputs — */
+  .input {
+    @apply w-full px-4 py-2.5 rounded-xl
+           bg-white border border-beige-300
+           text-charcoal-900 placeholder-charcoal-400
+           text-sm font-normal
+           focus:outline-none focus:ring-2 focus:ring-mint-400 focus:border-transparent
+           transition-all duration-200;
+  }
+  .input-label {
+    @apply block text-sm font-medium text-charcoal-700 mb-1.5;
+  }
+  .input-group {
+    @apply relative flex items-center;
+  }
+  .input-icon {
+    @apply absolute left-3.5 text-charcoal-400 text-sm pointer-events-none;
+  }
+  .input-with-icon {
+    @apply input pl-10;
+  }
+
+  /* — Badges — */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5
+           rounded-full text-xs font-semibold;
+  }
+  .badge-sage  { @apply badge bg-sage-100 text-sage-700; }
+  .badge-mint  { @apply badge bg-mint-100 text-mint-700; }
+  .badge-beige { @apply badge bg-beige-200 text-charcoal-700; }
+  .badge-red   { @apply badge bg-red-100 text-red-700; }
+
+  /* — Section headings — */
+  .section-title {
+    @apply text-lg font-display font-bold text-charcoal-800 tracking-tight;
+  }
+  .section-subtitle {
+    @apply text-sm text-charcoal-500 mt-0.5;
+  }
+
+  /* — Dividers — */
+  .divider {
+    @apply border-t border-beige-300 my-4;
+  }
+  .divider-vertical {
+    @apply border-l border-beige-300 mx-4 self-stretch;
+  }
+
+  /* — Navlink — */
+  .nav-link {
+    @apply flex items-center gap-2 px-3 py-2 rounded-xl
+           text-sm font-medium text-charcoal-600
+           hover:bg-sage-50 hover:text-sage-700
+           transition-all duration-200;
+  }
+  .nav-link-active {
+    @apply nav-link bg-sage-100 text-sage-700 font-semibold;
+  }
+
+  /* — Avatar — */
+  .avatar {
+    @apply rounded-full object-cover flex-shrink-0
+           ring-2 ring-beige-300;
+  }
+  .avatar-sm  { @apply avatar w-8  h-8; }
+  .avatar-md  { @apply avatar w-10 h-10; }
+  .avatar-lg  { @apply avatar w-14 h-14; }
+
+  /* — Skeleton loader — */
+  .skeleton {
+    @apply bg-beige-200 animate-shimmer rounded-lg;
+    background-size: 200% 100%;
+    background-image: linear-gradient(
+      90deg,
+      theme('colors.beige.200') 0%,
+      theme('colors.beige.100') 50%,
+      theme('colors.beige.200') 100%
+    );
+  }
+
+  /* — Empty state — */
+  .empty-state {
+    @apply flex flex-col items-center justify-center
+           py-16 px-8 text-center;
+  }
+  .empty-icon {
+    @apply w-14 h-14 rounded-2xl bg-sage-100 text-sage-500
+           flex items-center justify-center text-2xl mb-4;
+  }
+
+  /* — Page layout helpers — */
+  .page-wrapper {
+    @apply min-h-screen bg-beige-50 flex flex-col;
+  }
+  .page-container {
+    @apply max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8;
+  }
+  .page-header {
+    @apply mb-8;
+  }
+  .page-title {
+    @apply text-2xl font-display font-bold text-charcoal-900 tracking-tight;
+  }
+  .page-desc {
+    @apply text-sm text-charcoal-500 mt-1;
+  }
+
+  /* — Stat card — */
+  .stat-card {
+    @apply card flex flex-col gap-1;
+  }
+  .stat-value {
+    @apply text-3xl font-display font-bold text-charcoal-900;
+  }
+  .stat-label {
+    @apply text-xs font-medium text-charcoal-500 uppercase tracking-widest;
+  }
+
+  /* — Loading spinner — */
+  .spinner {
+    @apply inline-block w-5 h-5 rounded-full border-2
+           border-beige-300 border-t-sage-500 animate-spin;
+  }
+
+  /* — Toast / Alert — */
+  .alert {
+    @apply flex items-start gap-3 px-4 py-3 rounded-xl text-sm;
+  }
+  .alert-error   { @apply alert bg-red-50   border border-red-200   text-red-700; }
+  .alert-success { @apply alert bg-sage-50  border border-sage-200  text-sage-700; }
+  .alert-info    { @apply alert bg-mint-50  border border-mint-200  text-mint-700; }
+  .alert-warn    { @apply alert bg-beige-100 border border-beige-400 text-charcoal-700; }
 }
 
-* {
-  box-sizing: border-box;
+/* 6. Utility layer extras ────────────────────────────────────────────── */
+@layer utilities {
+  .text-gradient-sage {
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(135deg, #5a8f67 0%, #2d9ea1 100%);
+  }
+  .bg-gradient-sage {
+    background-image: linear-gradient(135deg, #5a8f67 0%, #7dab87 100%);
+  }
+  .bg-gradient-mint {
+    background-image: linear-gradient(135deg, #2d9ea1 0%, #47b9bc 100%);
+  }
+  .bg-gradient-warm {
+    background-image: linear-gradient(135deg, #f9f6ef 0%, #f2ebe0 100%);
+  }
+  .bg-hero {
+    background-image:
+      radial-gradient(ellipse 60% 50% at 10% 30%, rgba(90,143,103,0.10) 0%, transparent 70%),
+      radial-gradient(ellipse 50% 40% at 85% 20%, rgba(45,158,161,0.08) 0%, transparent 70%),
+      linear-gradient(160deg, #fdfcf8 0%, #f9f6ef 50%, #f0fafa 100%);
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 }
+
+/* 7. Keep backward-compat — old CSS modules still load fine next to Tailwind */
