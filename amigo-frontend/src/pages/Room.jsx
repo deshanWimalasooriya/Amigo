@@ -1,10 +1,23 @@
 /**
  * Room.jsx — WebRTC Video Room
- * BUG FIXES:
- *   1. height:100dvh instead of 100vh → no overflow under browser chrome
- *   2. Camera only starts INSIDE Room, never leaks to other pages
- *   3. initVideo/initAudio default FALSE — user opts in via PreJoinLobby
- *   4. Full Tailwind dark-room theme, Room.css purged
+ *
+ * FIX 1 — Audio not working for both ends:
+ *   getUserMedia was called with { video: initVideo, audio: initAudio }.
+ *   If the user had audio OFF in the lobby (initAudio = false), NO audio
+ *   track was ever acquired. getAudioTracks()[0] returned undefined, so
+ *   toggleMic had no effect and peers received a video-only stream.
+ *   FIX: always request { video: true, audio: true } to acquire both tracks
+ *   upfront, then immediately set track.enabled = false for whichever the
+ *   user had turned off. Toggle functions work correctly from that point.
+ *
+ * FIX 2 — Peer names show as 'Peer' instead of real name:
+ *   The 'offer' socket handler (called when existing user gets offer from
+ *   a newly joined user) called addPeer(callerId, 'Peer', stream) with a
+ *   hardcoded string. The real name was never passed through the offer path.
+ *   FIX: emit the local userName alongside the offer so the receiver knows
+ *   who is calling: socket.emit('offer', offer, targetId, userName).
+ *   The receiving handler signature becomes (inOffer, callerId, callerName)
+ *   and passes callerName to addPeer instead of 'Peer'.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -25,7 +38,7 @@ const RTC_CONFIG = {
   ],
 };
 
-// ── RemoteVideo tile ────────────────────────────────────────────────────────
+// ── RemoteVideo tile ──────────────────────────────────────────────────────────
 const RemoteVideo = React.memo(({ peerId, peerName, streamRef }) => {
   const videoRef = useRef(null);
   useEffect(() => {
@@ -33,19 +46,21 @@ const RemoteVideo = React.memo(({ peerId, peerName, streamRef }) => {
       videoRef.current.srcObject = streamRef.current;
   }, [streamRef]);
   return (
-    <div className="relative bg-slate-800 rounded-2xl overflow-hidden aspect-video flex items-center justify-center">
+    <div className="relative bg-slate-800 rounded-2xl overflow-hidden aspect-video
+                    flex items-center justify-center">
       <video ref={videoRef} autoPlay playsInline
         className="w-full h-full object-cover" />
       <span className="absolute bottom-2 left-3 text-xs text-white/80 font-medium
-                       bg-black/40 px-2 py-0.5 rounded-full">{peerName}</span>
+                       bg-black/40 px-2 py-0.5 rounded-full">
+        {peerName}
+      </span>
     </div>
   );
 });
 RemoteVideo.displayName = 'RemoteVideo';
 
-// ── PreJoinLobby ─────────────────────────────────────────────────────────────
-// Shown before entering the room so user can check cam/mic WITHOUT being live.
-const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCancel }) => {
+// ── PreJoinLobby ──────────────────────────────────────────────────────────────
+const PreJoinLobby = ({ title, userName, onJoin, onCancel }) => {
   const videoRef  = useRef(null);
   const streamRef = useRef(null);
   const [camOn,  setCamOn]  = useState(true);
@@ -87,7 +102,6 @@ const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCa
   };
 
   const handleJoin = () => {
-    // Stop preview stream — Room.jsx will acquire a fresh stream
     streamRef.current?.getTracks().forEach(t => t.stop());
     onJoin({ video: camOn, audio: micOn });
   };
@@ -95,13 +109,10 @@ const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCa
   return (
     <div className="min-h-screen bg-slate-900 flex items-center justify-center p-6">
       <div className="w-full max-w-2xl space-y-6">
-        {/* Title */}
         <div className="text-center">
           <h1 className="text-2xl font-bold text-white">{title}</h1>
           <p className="text-slate-400 text-sm mt-1">Check your camera and mic before joining</p>
         </div>
-
-        {/* Preview */}
         <div className="relative bg-slate-800 rounded-2xl overflow-hidden aspect-video
                         flex items-center justify-center">
           <video ref={videoRef} autoPlay playsInline muted
@@ -113,19 +124,18 @@ const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCa
                               text-2xl font-bold text-white">
                 {userName.charAt(0).toUpperCase()}
               </div>
-              <p className="text-slate-400 text-sm mt-3">{camOn ? 'Connecting camera…' : 'Camera off'}</p>
+              <p className="text-slate-400 text-sm mt-3">
+                {camOn ? 'Connecting camera…' : 'Camera off'}
+              </p>
             </div>
           )}
           <span className="absolute bottom-3 left-4 text-xs text-white/70 bg-black/40
                            px-2 py-0.5 rounded-full">{userName} (You)</span>
         </div>
-
         {error && (
           <div className="bg-yellow-900/40 border border-yellow-700 text-yellow-300
                           text-sm px-4 py-2.5 rounded-xl">{error}</div>
         )}
-
-        {/* Cam / Mic toggles */}
         <div className="flex gap-3 justify-center">
           <button onClick={toggleCam}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm
@@ -146,8 +156,6 @@ const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCa
             {micOn ? 'Mic On' : 'Mic Off'}
           </button>
         </div>
-
-        {/* Join / Cancel */}
         <div className="flex gap-3">
           <button onClick={onCancel}
             className="flex-1 py-3 rounded-xl bg-slate-700 text-white font-semibold
@@ -166,7 +174,7 @@ const PreJoinLobby = ({ roomId, title, userName, isHost, meetingId, onJoin, onCa
   );
 };
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 const formatMeetingTime = (isoDate) => {
   if (!isoDate) return 'Instant';
   const d = new Date(isoDate);
@@ -189,28 +197,24 @@ const Room = () => {
     title     = `Room ${roomId}`,
   } = location.state || {};
 
-  // ── Show PreJoin lobby until user clicks "Join" ──────────────────────────
-  const [joined,     setJoined]     = useState(false);
-  const [initAudio,  setInitAudio]  = useState(false);  // set by lobby
-  const [initVideo,  setInitVideo]  = useState(false);  // set by lobby
+  const [joined,    setJoined]    = useState(false);
+  const [initAudio, setInitAudio] = useState(false);
+  const [initVideo, setInitVideo] = useState(false);
 
-  const handleLobbyJoin = useCallback(({ video, audio }) => {
-    setInitVideo(video);
-    setInitAudio(audio);
-    setJoined(true);
+  const handleLobbyJoin   = useCallback(({ video, audio }) => {
+    setInitVideo(video); setInitAudio(audio); setJoined(true);
   }, []);
-
   const handleLobbyCancel = useCallback(() => navigate('/dashboard'), [navigate]);
 
   // ── Refs ──────────────────────────────────────────────────────────────────
-  const socketRef       = useRef(null);
-  const myVideoRef      = useRef(null);
-  const myStreamRef     = useRef(null);
-  const isCleanedUp     = useRef(false);
-  const hasEndedMeeting = useRef(false);
-  const chatBottomRef   = useRef(null);
-  const meetingStartRef = useRef(null);
-  const pcsRef          = useRef(new Map());
+  const socketRef         = useRef(null);
+  const myVideoRef        = useRef(null);
+  const myStreamRef       = useRef(null);
+  const isCleanedUp       = useRef(false);
+  const hasEndedMeeting   = useRef(false);
+  const chatBottomRef     = useRef(null);
+  const meetingStartRef   = useRef(null);
+  const pcsRef            = useRef(new Map());
   const mediaRecorderRef  = useRef(null);
   const recordedChunksRef = useRef([]);
   const recordingStartRef = useRef(null);
@@ -233,7 +237,6 @@ const Room = () => {
   const [recordingError,  setRecordingError]  = useState('');
   const [elapsed,         setElapsed]         = useState('00:00');
 
-  // ── Clock ─────────────────────────────────────────────────────────────────
   useEffect(() => {
     const t = setInterval(() => {
       setTime(new Date());
@@ -247,14 +250,13 @@ const Room = () => {
     return () => clearInterval(t);
   }, []);
 
-  // ── Auto-scroll chat ──────────────────────────────────────────────────────
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   // ── WebRTC helpers ────────────────────────────────────────────────────────
   const createPC = useCallback((peerId, peerName, localStream) => {
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const pc        = new RTCPeerConnection(RTC_CONFIG);
     const streamRef = { current: new MediaStream() };
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
     pc.ontrack = (ev) => {
@@ -282,19 +284,29 @@ const Room = () => {
     setPeers(prev => prev.filter(p => p.peerId !== peerId));
   }, []);
 
-  // ── Main Socket + Media effect — ONLY runs after lobby join ──────────────
+  // ── Main Socket + Media — runs only after lobby join ──────────────────────
   useEffect(() => {
-    if (!joined) return;   // ← KEY FIX: camera never starts until user clicks Join
-    isCleanedUp.current   = false;
+    if (!joined) return;
+    isCleanedUp.current     = false;
     meetingStartRef.current = Date.now();
 
     const socket = io(SOCKET_SERVER, { withCredentials: true, transports: ['websocket','polling'] });
     socketRef.current = socket;
 
+    // FIX 1: ALWAYS request both video + audio tracks regardless of lobby choice.
+    // We disable the unwanted tracks immediately after. This ensures both audio
+    // and video senders exist in every RTCPeerConnection so toggling always works.
     navigator.mediaDevices
-      .getUserMedia({ video: initVideo, audio: initAudio })
+      .getUserMedia({ video: true, audio: true })
       .then(async (stream) => {
         if (isCleanedUp.current) { stream.getTracks().forEach(t => t.stop()); return; }
+
+        // Apply lobby preferences by disabling tracks the user turned off
+        const videoTrack = stream.getVideoTracks()[0];
+        const audioTrack = stream.getAudioTracks()[0];
+        if (videoTrack) videoTrack.enabled = initVideo;
+        if (audioTrack) audioTrack.enabled = initAudio;
+
         myStreamRef.current = stream;
         if (myVideoRef.current) myVideoRef.current.srcObject = stream;
         setMicOn(initAudio);
@@ -302,35 +314,44 @@ const Room = () => {
 
         socket.emit('join-room', roomId, socket.id, userName);
 
+        // Existing user receives new joiner's connection request
         socket.on('user-connected', async (uid, uname) => {
           if (isCleanedUp.current) return;
-          const pc = addPeer(uid, uname || 'Peer', stream);
+          const pc = addPeer(uid, uname || 'Participant', stream);
           if (!pc) return;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.emit('offer', pc.localDescription, uid);
+          // FIX 2: include our userName so the receiver knows who we are
+          socket.emit('offer', pc.localDescription, uid, userName);
         });
-        socket.on('offer', async (inOffer, callerId) => {
+
+        // FIX 2: offer handler now receives callerName as third argument
+        socket.on('offer', async (inOffer, callerId, callerName) => {
           if (isCleanedUp.current) return;
-          const pc = addPeer(callerId, 'Peer', stream);
+          // Use real callerName instead of hardcoded 'Peer'
+          const pc = addPeer(callerId, callerName || 'Participant', stream);
           if (!pc) return;
           await pc.setRemoteDescription(new RTCSessionDescription(inOffer));
           const ans = await pc.createAnswer();
           await pc.setLocalDescription(ans);
           socket.emit('answer', pc.localDescription, callerId);
         });
+
         socket.on('answer', async (inAns, peerId) => {
           if (isCleanedUp.current) return;
           const e = pcsRef.current.get(peerId);
           if (!e || e.pc.remoteDescription) return;
           await e.pc.setRemoteDescription(new RTCSessionDescription(inAns));
         });
+
         socket.on('ice-candidate', async (cand, peerId) => {
           if (isCleanedUp.current) return;
           const e = pcsRef.current.get(peerId);
           if (e) await e.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.warn);
         });
+
         socket.on('user-disconnected', removePeer);
+
         socket.on('chat-message', (msg, senderName, senderId) => {
           if (isCleanedUp.current) return;
           setMessages(prev => [...prev, {
@@ -409,8 +430,8 @@ const Room = () => {
       .find(t => MediaRecorder.isTypeSupported(t)) || '';
     try {
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : {});
-      recordedChunksRef.current  = [];
-      recordingStartRef.current  = Date.now();
+      recordedChunksRef.current = [];
+      recordingStartRef.current = Date.now();
       rec.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunksRef.current.push(e.data); };
       rec.onstop = async () => {
         setRecordingSaving(true);
@@ -468,7 +489,11 @@ const Room = () => {
   }, []);
 
   const toggleSidePanel = useCallback((tab) => {
-    setSidePanelOpen(prev => { if (prev && activeTab === tab) return false; setActiveTab(tab); return true; });
+    setSidePanelOpen(prev => {
+      if (prev && activeTab === tab) return false;
+      setActiveTab(tab);
+      return true;
+    });
   }, [activeTab]);
 
   const copyRoomId = useCallback(() => {
@@ -481,13 +506,8 @@ const Room = () => {
   if (!joined) {
     return (
       <PreJoinLobby
-        roomId={roomId}
-        title={title}
-        userName={userName}
-        isHost={isHost}
-        meetingId={meetingId}
-        onJoin={handleLobbyJoin}
-        onCancel={handleLobbyCancel}
+        title={title} userName={userName} isHost={isHost} meetingId={meetingId}
+        roomId={roomId} onJoin={handleLobbyJoin} onCancel={handleLobbyCancel}
       />
     );
   }
@@ -508,13 +528,11 @@ const Room = () => {
   }
 
   // ── MAIN ROOM UI ──────────────────────────────────────────────────────────
-  // KEY FIX: use h-[100dvh] instead of 100vh so the room does not overflow
-  // under the browser address bar / tab bar on mobile & desktop.
   return (
     <div className="fixed inset-0 bg-slate-900 flex flex-col overflow-hidden"
          style={{ height: '100dvh' }}>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <header className="flex items-center justify-between px-4 py-2.5
                          bg-slate-800/80 backdrop-blur border-b border-slate-700/50
                          flex-shrink-0 z-10">
@@ -544,7 +562,7 @@ const Room = () => {
         </div>
       </header>
 
-      {/* ── VIDEO GRID ── */}
+      {/* VIDEO GRID */}
       <main className={`flex-1 overflow-hidden p-3 transition-all duration-300
                         ${sidePanelOpen ? 'mr-72' : ''}`}>
         <div className={`h-full grid gap-3 auto-rows-fr
@@ -560,8 +578,8 @@ const Room = () => {
                           ${videoOn ? 'opacity-100' : 'opacity-0'}`} />
             {!videoOn && (
               <div className="absolute inset-0 flex flex-col items-center justify-center">
-                <div className="w-14 h-14 rounded-full bg-slate-600 flex items-center justify-center
-                                text-xl font-bold text-white">
+                <div className="w-14 h-14 rounded-full bg-slate-600 flex items-center
+                                justify-center text-xl font-bold text-white">
                   {userName.charAt(0).toUpperCase()}
                 </div>
               </div>
@@ -580,60 +598,48 @@ const Room = () => {
         </div>
       </main>
 
-      {/* ── CONTROL DOCK ── */}
+      {/* CONTROL DOCK */}
       <div className="flex-shrink-0 flex items-center justify-between
                       px-4 py-3 bg-slate-800/90 backdrop-blur
                       border-t border-slate-700/50 z-10">
-
-        {/* Left: elapsed */}
         <div className="hidden sm:flex items-center gap-1 text-slate-400 text-xs min-w-[60px]">
           <span className="font-mono text-slate-300">{elapsed}</span>
           <span>elapsed</span>
         </div>
-
-        {/* Center: media controls */}
         <div className="flex items-center gap-2 flex-wrap justify-center">
-          {/* Mic */}
-          <button onClick={toggleMic} title={micOn ? 'Mute' : 'Unmute'}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200
-                        ${ !micOn ? 'bg-red-600/90 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+          <button onClick={toggleMic}
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200
+                        ${!micOn ? 'bg-red-600/90 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             {micOn ? <FaMicrophone className="text-base" /> : <FaMicrophoneSlash className="text-base" />}
             <span>{micOn ? 'Mute' : 'Unmute'}</span>
           </button>
-
-          {/* Camera */}
-          <button onClick={toggleVideo} title={videoOn ? 'Stop Video' : 'Start Video'}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200
-                        ${ !videoOn ? 'bg-red-600/90 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+          <button onClick={toggleVideo}
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200
+                        ${!videoOn ? 'bg-red-600/90 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             {videoOn ? <FaVideo className="text-base" /> : <FaVideoSlash className="text-base" />}
             <span>{videoOn ? 'Stop Video' : 'Start Video'}</span>
           </button>
-
-          {/* Screen share */}
           <button onClick={toggleScreenShare}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200
-                        ${ screenShare ? 'bg-sage-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200
+                        ${screenShare ? 'bg-sage-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             <FaDesktop className="text-base" />
             <span>{screenShare ? 'Stop Share' : 'Share'}</span>
           </button>
-
-          {/* Record */}
           <button onClick={isRecording ? stopRecording : startRecording} disabled={recordingSaving}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200
-                        ${ isRecording ? 'bg-red-600/90 text-white animate-pulse' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200
+                        ${isRecording ? 'bg-red-600/90 text-white animate-pulse' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             {isRecording ? <FaStop className="text-base" /> : <FaCircle className="text-base text-red-400" />}
             <span>{isRecording ? 'Stop Rec' : 'Record'}</span>
           </button>
-
-          {/* Participants */}
           <button onClick={() => toggleSidePanel('participants')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200 relative
-                        ${ sidePanelOpen && activeTab==='participants' ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200 relative
+                        ${sidePanelOpen && activeTab === 'participants'
+                          ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             <FaUserFriends className="text-base" />
             <span>People</span>
             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-mint-500
@@ -641,33 +647,29 @@ const Room = () => {
               {peers.length + 1}
             </span>
           </button>
-
-          {/* Chat */}
           <button onClick={() => toggleSidePanel('chat')}
-            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl
-                        text-xs font-medium transition-all duration-200
-                        ${ sidePanelOpen && activeTab==='chat' ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+            className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
+                        transition-all duration-200
+                        ${sidePanelOpen && activeTab === 'chat'
+                          ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             <FaComments className="text-base" />
             <span>Chat</span>
           </button>
         </div>
-
-        {/* Right: End / Leave */}
         <div className="min-w-[60px] flex justify-end">
           <button onClick={handleEndCall} disabled={endingCall}
-            className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl
-                       text-xs font-bold bg-red-600 text-white hover:bg-red-700
-                       disabled:opacity-60 transition-all duration-200">
+            className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl text-xs font-bold
+                       bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-all duration-200">
             <FaPhoneSlash className="text-base" />
             <span>{endingCall ? 'Ending…' : isHost ? 'End' : 'Leave'}</span>
           </button>
         </div>
       </div>
 
-      {/* ── SIDE PANEL ── */}
+      {/* SIDE PANEL */}
       <aside className={`fixed top-0 right-0 h-full w-72 bg-slate-800 border-l border-slate-700
                          flex flex-col transition-transform duration-300 z-20
-                         ${ sidePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
+                         ${sidePanelOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         <div className="flex items-center justify-between px-4 py-3
                         border-b border-slate-700 flex-shrink-0">
           <h3 className="text-sm font-semibold text-white">
@@ -680,7 +682,7 @@ const Room = () => {
           </button>
         </div>
 
-        {/* Chat tab */}
+        {/* Chat */}
         {activeTab === 'chat' && (
           <div className="flex flex-col flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-3 space-y-2">
@@ -688,10 +690,10 @@ const Room = () => {
                 <p className="text-center text-slate-500 text-xs mt-8">No messages yet. Say hello! 👋</p>
               )}
               {messages.map((m, i) => (
-                <div key={i} className={`flex flex-col ${ m.mine ? 'items-end' : 'items-start'}`}>
+                <div key={i} className={`flex flex-col ${m.mine ? 'items-end' : 'items-start'}`}>
                   <span className="text-[10px] text-slate-500 mb-0.5">{m.user} · {m.time}</span>
                   <div className={`text-sm px-3 py-2 rounded-xl max-w-[85%] leading-snug
-                    ${ m.mine ? 'bg-sage-600 text-white' : 'bg-slate-700 text-slate-200'}`}>
+                    ${m.mine ? 'bg-sage-600 text-white' : 'bg-slate-700 text-slate-200'}`}>
                     {m.text}
                   </div>
                 </div>
@@ -714,10 +716,9 @@ const Room = () => {
           </div>
         )}
 
-        {/* Participants tab */}
+        {/* Participants */}
         {activeTab === 'participants' && (
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
-            {/* Self */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-700/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-sage-600 flex items-center justify-center
@@ -726,7 +727,9 @@ const Room = () => {
                 </div>
                 <div>
                   <p className="text-sm font-medium text-white">{userName} (You)</p>
-                  {isHost && <span className="text-[10px] bg-sage-600 text-white px-1.5 py-0.5 rounded-full">HOST</span>}
+                  {isHost && (
+                    <span className="text-[10px] bg-sage-600 text-white px-1.5 py-0.5 rounded-full">HOST</span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-1.5 text-xs">
@@ -738,9 +741,9 @@ const Room = () => {
               <div key={peerId} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-700/30">
                 <div className="w-8 h-8 rounded-full bg-mint-600 flex items-center justify-center
                                 text-sm font-bold text-white">
-                  {(peerName||'P').charAt(0).toUpperCase()}
+                  {(peerName || 'P').charAt(0).toUpperCase()}
                 </div>
-                <p className="text-sm text-slate-200">{peerName || 'Peer'}</p>
+                <p className="text-sm text-slate-200">{peerName || 'Participant'}</p>
               </div>
             ))}
             <button onClick={copyRoomId}
