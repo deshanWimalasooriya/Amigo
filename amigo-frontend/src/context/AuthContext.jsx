@@ -6,35 +6,50 @@
  * doesn't flash-redirect to /auth) while the /api/auth/me verification runs
  * in the background. If /me returns 401, we clear the cache and redirect.
  *
- * This fixes:
- *  - Redirect to /auth on every page refresh
- *  - "No token" errors on meeting API calls
+ * ADDITION: After a successful session verification, we emit 'register-user'
+ * on a shared Socket.IO connection so the server can push real-time
+ * notifications (bell badge) to this specific user.
  */
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 
-const API        = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API        = import.meta.env.VITE_API_URL    || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_SERVER || 'http://localhost:5000';
 const CACHE_KEY  = 'amigo_user';
+
+// Module-level socket — created once, shared across the app for notifications.
+// This is separate from the per-room socket created inside Room.jsx.
+let notifSocket = null;
+
+export const getNotifSocket = () => notifSocket;
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
 
-  // Warm-start from cache so ProtectedRoute never flashes a redirect
   const cached = (() => {
     try { return JSON.parse(localStorage.getItem(CACHE_KEY)); }
     catch { return null; }
   })();
 
-  const [user,    setUser]    = useState(cached);   // start with cached user
-  const [loading, setLoading] = useState(true);     // still verify with server
+  const [user,    setUser]    = useState(cached);
+  const [loading, setLoading] = useState(true);
 
-  // -------------------------------------------------------------------------
-  // On mount: verify the session cookie with the server.
-  // We already have a cached user, so ProtectedRoute shows the page while
-  // this check runs. If the token is expired, we clear everything.
-  // -------------------------------------------------------------------------
+  // ── Register user with socket for live notification pushes ──────────────
+  const registerSocket = useCallback((userId) => {
+    if (!userId) return;
+    if (!notifSocket || !notifSocket.connected) {
+      notifSocket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+      });
+    }
+    notifSocket.emit('register-user', userId);
+  }, []);
+
+  // ── Session verification on mount ────────────────────────────────────────
   useEffect(() => {
     const checkSession = async () => {
       try {
@@ -46,19 +61,20 @@ export const AuthProvider = ({ children }) => {
           const data = await res.json();
           setUser(data);
           localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+          // ✅ Register with socket so notifications arrive in real-time
+          registerSocket(data.id);
         } else {
-          // Token expired or invalid — clear everything
           setUser(null);
           localStorage.removeItem(CACHE_KEY);
-          // Only redirect if we're on a protected page (not / or /auth)
+          notifSocket?.disconnect();
+          notifSocket = null;
           const pub = ['/', '/auth'];
           if (!pub.includes(window.location.pathname)) {
             navigate('/auth', { replace: true });
           }
         }
       } catch {
-        // Network error — keep cached user so offline use still works
-        // Don't redirect on network failures
+        // Network error — keep cached user, don't redirect
       } finally {
         setLoading(false);
       }
@@ -70,7 +86,9 @@ export const AuthProvider = ({ children }) => {
   const login = useCallback((userData) => {
     setUser(userData);
     localStorage.setItem(CACHE_KEY, JSON.stringify(userData));
-  }, []);
+    // Register immediately on login
+    registerSocket(userData.id);
+  }, [registerSocket]);
 
   const updateUser = useCallback((updatedData) => {
     setUser(prev => {
@@ -87,6 +105,8 @@ export const AuthProvider = ({ children }) => {
         credentials: 'include',
       });
     } catch { /* ignore */ }
+    notifSocket?.disconnect();
+    notifSocket = null;
     setUser(null);
     localStorage.removeItem(CACHE_KEY);
     navigate('/auth', { replace: true });

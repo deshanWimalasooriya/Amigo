@@ -1,23 +1,26 @@
 /**
- * Room.jsx — WebRTC Video Room
+ * Room.jsx — WebRTC Video Room (patched)
  *
- * FIX 1 — Audio not working for both ends:
- *   getUserMedia was called with { video: initVideo, audio: initAudio }.
- *   If the user had audio OFF in the lobby (initAudio = false), NO audio
- *   track was ever acquired. getAudioTracks()[0] returned undefined, so
- *   toggleMic had no effect and peers received a video-only stream.
- *   FIX: always request { video: true, audio: true } to acquire both tracks
- *   upfront, then immediately set track.enabled = false for whichever the
- *   user had turned off. Toggle functions work correctly from that point.
+ * PATCH 1 — callerName from offer payload:
+ *   socket.on('offer', (offer, fromSocketId, callerName)) now correctly
+ *   passes callerName to addPeer() instead of 'Participant'.
  *
- * FIX 2 — Peer names show as 'Peer' instead of real name:
- *   The 'offer' socket handler (called when existing user gets offer from
- *   a newly joined user) called addPeer(callerId, 'Peer', stream) with a
- *   hardcoded string. The real name was never passed through the offer path.
- *   FIX: emit the local userName alongside the offer so the receiver knows
- *   who is calling: socket.emit('offer', offer, targetId, userName).
- *   The receiving handler signature becomes (inOffer, callerId, callerName)
- *   and passes callerName to addPeer instead of 'Peer'.
+ * PATCH 2 — room-participants seeds peerNames on join:
+ *   When a user joins a room that already has participants, the server
+ *   emits 'room-participants' with the list. We now iterate that list
+ *   and add each as a peer entry so names appear immediately without
+ *   waiting for the offer/answer flow.
+ *
+ * PATCH 3 — user-disconnected socket argument fix:
+ *   Server emits: socket.to(roomId).emit('user-disconnected', userId, socket.id)
+ *   Room now calls removePeer(socketId) using the second argument (socketId),
+ *   not the first (userId), matching how pcsRef is keyed.
+ *
+ * PATCH 4 — Recording: local-first auto-download:
+ *   On rec.onstop the blob immediately triggers an <a> download so the
+ *   file lands in the user's Downloads folder. Metadata is then saved
+ *   to the server via recordingAPI.save() in the background.
+ *   recordingAPI.create() → recordingAPI.save() (matching api.js export).
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -26,7 +29,7 @@ import {
   FaMicrophone, FaMicrophoneSlash, FaVideo, FaVideoSlash,
   FaDesktop, FaPhoneSlash, FaComments, FaUserFriends,
   FaChevronRight, FaPaperPlane, FaExpand, FaCompress,
-  FaCircle, FaStop, FaLock,
+  FaCircle, FaStop, FaLock, FaDownload,
 } from 'react-icons/fa';
 import { meetingAPI, recordingAPI } from '../services/api';
 
@@ -236,6 +239,7 @@ const Room = () => {
   const [endingCall,      setEndingCall]      = useState(false);
   const [recordingError,  setRecordingError]  = useState('');
   const [elapsed,         setElapsed]         = useState('00:00');
+  const [lastDownload,    setLastDownload]    = useState(null); // filename of last saved recording
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -278,10 +282,10 @@ const Room = () => {
     return pc;
   }, [createPC]);
 
-  const removePeer = useCallback((peerId) => {
-    const e = pcsRef.current.get(peerId);
-    if (e) { try { e.pc.close(); } catch(_){} pcsRef.current.delete(peerId); }
-    setPeers(prev => prev.filter(p => p.peerId !== peerId));
+  const removePeer = useCallback((socketId) => {
+    const e = pcsRef.current.get(socketId);
+    if (e) { try { e.pc.close(); } catch(_){} pcsRef.current.delete(socketId); }
+    setPeers(prev => prev.filter(p => p.peerId !== socketId));
   }, []);
 
   // ── Main Socket + Media — runs only after lobby join ──────────────────────
@@ -293,15 +297,11 @@ const Room = () => {
     const socket = io(SOCKET_SERVER, { withCredentials: true, transports: ['websocket','polling'] });
     socketRef.current = socket;
 
-    // FIX 1: ALWAYS request both video + audio tracks regardless of lobby choice.
-    // We disable the unwanted tracks immediately after. This ensures both audio
-    // and video senders exist in every RTCPeerConnection so toggling always works.
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then(async (stream) => {
         if (isCleanedUp.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
-        // Apply lobby preferences by disabling tracks the user turned off
         const videoTrack = stream.getVideoTracks()[0];
         const audioTrack = stream.getAudioTracks()[0];
         if (videoTrack) videoTrack.enabled = initVideo;
@@ -314,21 +314,33 @@ const Room = () => {
 
         socket.emit('join-room', roomId, socket.id, userName);
 
-        // Existing user receives new joiner's connection request
+        // PATCH 2: seed peer tiles from participants already in the room
+        socket.on('room-participants', (participants) => {
+          if (isCleanedUp.current) return;
+          participants.forEach(({ socketId, userName: pName }) => {
+            if (!pcsRef.current.has(socketId)) {
+              const { pc, streamRef } = createPC(socketId, pName || 'Participant', stream);
+              pcsRef.current.set(socketId, { pc, streamRef });
+              setPeers(prev => [
+                ...prev.filter(p => p.peerId !== socketId),
+                { peerId: socketId, peerName: pName || 'Participant', streamRef },
+              ]);
+            }
+          });
+        });
+
         socket.on('user-connected', async (uid, uname) => {
           if (isCleanedUp.current) return;
           const pc = addPeer(uid, uname || 'Participant', stream);
           if (!pc) return;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          // FIX 2: include our userName so the receiver knows who we are
           socket.emit('offer', pc.localDescription, uid, userName);
         });
 
-        // FIX 2: offer handler now receives callerName as third argument
+        // PATCH 1: callerName from offer payload
         socket.on('offer', async (inOffer, callerId, callerName) => {
           if (isCleanedUp.current) return;
-          // Use real callerName instead of hardcoded 'Peer'
           const pc = addPeer(callerId, callerName || 'Participant', stream);
           if (!pc) return;
           await pc.setRemoteDescription(new RTCSessionDescription(inOffer));
@@ -350,7 +362,10 @@ const Room = () => {
           if (e) await e.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.warn);
         });
 
-        socket.on('user-disconnected', removePeer);
+        // PATCH 3: server emits (userId, socketId) — key is socketId
+        socket.on('user-disconnected', (_userId, socketId) => {
+          removePeer(socketId);
+        });
 
         socket.on('chat-message', (msg, senderName, senderId) => {
           if (isCleanedUp.current) return;
@@ -422,10 +437,12 @@ const Room = () => {
     } catch (e) { console.error('Screen share failed:', e); }
   }, [screenShare, stopScreenShare]);
 
+  // PATCH 4: Local-first recording — auto-download immediately, then save metadata
   const startRecording = useCallback(() => {
     const stream = myStreamRef.current;
     if (!stream) return;
     setRecordingError('');
+    setLastDownload(null);
     const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4']
       .find(t => MediaRecorder.isTypeSupported(t)) || '';
     try {
@@ -435,16 +452,35 @@ const Room = () => {
       rec.ondataavailable = (e) => { if (e.data?.size > 0) recordedChunksRef.current.push(e.data); };
       rec.onstop = async () => {
         setRecordingSaving(true);
-        const dur  = Math.floor((Date.now() - recordingStartRef.current) / 1000);
-        const blob = new Blob(recordedChunksRef.current, { type: mimeType || 'video/webm' });
-        const url  = URL.createObjectURL(blob);
-        const a    = document.createElement('a');
-        a.href = url; a.download = `Amigo-${roomId}-${Date.now()}.webm`; a.click();
-        try {
-          await recordingAPI.create({ meetingId, title: `Recording — ${title}`, duration: dur, fileSize: blob.size, fileUrl: url });
-        } catch (err) {
-          setRecordingError('Downloaded but could not save to server.');
-        } finally { setRecordingSaving(false); recordedChunksRef.current = []; }
+        const dur      = Math.floor((Date.now() - recordingStartRef.current) / 1000);
+        const blob     = new Blob(recordedChunksRef.current, { type: mimeType || 'video/webm' });
+        const ext      = mimeType.includes('mp4') ? 'mp4' : 'webm';
+        const filename = `Amigo-${roomId}-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.${ext}`;
+
+        // ✅ Immediately download to user's local Downloads folder
+        const url = URL.createObjectURL(blob);
+        const a   = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
+        setLastDownload(filename);
+
+        // Save metadata to server in the background (non-blocking)
+        recordingAPI.save({
+          meetingId,
+          title:    `Recording — ${title}`,
+          duration: dur,
+          fileSize: blob.size,
+          fileUrl:  filename, // store filename as reference
+        }).catch(() => {
+          setRecordingError('Downloaded locally. Could not save record to server.');
+        });
+
+        recordedChunksRef.current = [];
+        setRecordingSaving(false);
       };
       rec.start(1000);
       mediaRecorderRef.current = rec;
@@ -550,7 +586,13 @@ const Room = () => {
             </span>
           )}
           {recordingSaving && <span className="text-xs text-yellow-400">Saving…</span>}
-          {recordingError  && <span className="text-xs text-red-400">{recordingError}</span>}
+          {/* Show download confirmation badge */}
+          {lastDownload && !isRecording && (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <FaDownload className="text-[10px]" /> Saved to Downloads
+            </span>
+          )}
+          {recordingError && <span className="text-xs text-red-400">{recordingError}</span>}
           <span className="text-slate-400 text-xs">
             {time.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
           </span>

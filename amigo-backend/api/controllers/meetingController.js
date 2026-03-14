@@ -99,7 +99,37 @@ exports.getMeetingByRoomId = async (req, res) => {
   }
 };
 
-// ── 5. START ──────────────────────────────────────────────────────────────
+// ── 5. JOIN (passcode validation) ─────────────────────────────────────────
+// POST /api/meetings/:roomId/join
+exports.joinMeeting = async (req, res) => {
+  try {
+    const meeting = await Meeting.findOne({
+      where: { roomId: req.params.roomId },
+      include: [{ model: User, as: 'host', attributes: ['id', 'fullName', 'avatar'] }],
+    });
+
+    if (!meeting)
+      return res.status(404).json({ message: 'Meeting not found. Check the Room ID.' });
+
+    if (meeting.status === 'ended')
+      return res.status(410).json({ message: 'This meeting has already ended.' });
+
+    // Passcode check — only enforced when the host set one
+    if (meeting.passcode && meeting.passcode.trim() !== '') {
+      const supplied = (req.body.passcode || '').trim().toLowerCase();
+      const stored   = meeting.passcode.trim().toLowerCase();
+      if (supplied !== stored)
+        return res.status(401).json({ message: 'Incorrect passcode.' });
+    }
+
+    // All good — return meeting so frontend can navigate to /room/:roomId
+    res.json(meeting);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+// ── 6. START ──────────────────────────────────────────────────────────────
 // PUT /api/meetings/:roomId/start
 exports.startMeeting = async (req, res) => {
   try {
@@ -115,7 +145,7 @@ exports.startMeeting = async (req, res) => {
   }
 };
 
-// ── 6. END ────────────────────────────────────────────────────────────────
+// ── 7. END ────────────────────────────────────────────────────────────────
 // PUT /api/meetings/:roomId/end
 exports.endMeeting = async (req, res) => {
   try {
@@ -131,7 +161,7 @@ exports.endMeeting = async (req, res) => {
   }
 };
 
-// ── 7. UPDATE ─────────────────────────────────────────────────────────────
+// ── 8. UPDATE ─────────────────────────────────────────────────────────────
 // PUT /api/meetings/:roomId
 exports.updateMeeting = async (req, res) => {
   try {
@@ -155,7 +185,7 @@ exports.updateMeeting = async (req, res) => {
   }
 };
 
-// ── 8. DELETE ─────────────────────────────────────────────────────────────
+// ── 9. DELETE ─────────────────────────────────────────────────────────────
 // DELETE /api/meetings/:roomId
 exports.deleteMeeting = async (req, res) => {
   try {
@@ -171,7 +201,7 @@ exports.deleteMeeting = async (req, res) => {
   }
 };
 
-// ── 9. DASHBOARD STATS ────────────────────────────────────────────────────
+// ── 10. DASHBOARD STATS ───────────────────────────────────────────────────
 // GET /api/meetings/stats
 exports.getDashboardStats = async (req, res) => {
   try {
