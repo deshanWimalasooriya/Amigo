@@ -39,9 +39,7 @@ const io = new Server(server, {
   cors: { origin: allowedOrigins, methods: ['GET','POST'], credentials: true },
 });
 
-// Inject io into notification controller for real-time pushes
 notifCtrl.setIo(io);
-// Start 10-min reminder cron
 notifCtrl.startReminderCron();
 
 // Room tracking: { roomId: [{ socketId, userId, userName }] }
@@ -50,24 +48,26 @@ const rooms = {};
 io.on('connection', (socket) => {
   console.log(`⚡ New connection: ${socket.id}`);
 
-  // Join a personal notification room so we can push to specific users
   socket.on('register-user', (userId) => {
     socket.join(`user:${userId}`);
   });
 
-  socket.on('join-room', (roomId, userId, userName) => {
+  socket.on('join-room', (roomId, _clientUserId, userName) => {
     socket.join(roomId);
     if (!rooms[roomId]) rooms[roomId] = [];
-    rooms[roomId].push({ socketId: socket.id, userId, userName });
+    rooms[roomId].push({ socketId: socket.id, userName });
 
     console.log(`✅ ${userName} joined room [${roomId}] — ${rooms[roomId].length} user(s)`);
 
-    socket.to(roomId).emit('user-connected', userId, userName);
+    // FIX: emit socket.id as the peer identifier so the existing user
+    // keys their PC map by socketId — consistent with how answer/ice route.
+    // Also pass userName so the receiver can label the tile immediately.
+    socket.to(roomId).emit('user-connected', socket.id, userName);
 
+    // Tell the new joiner who is already present (name map only, no PC created)
     const others = rooms[roomId].filter(u => u.socketId !== socket.id);
     socket.emit('room-participants', others);
 
-    // WebRTC signaling — forward callerName so receiving side shows real name
     socket.on('offer', (offer, targetSocketId, callerName) => {
       io.to(targetSocketId).emit('offer', offer, socket.id, callerName || userName);
     });
@@ -102,7 +102,7 @@ io.on('connection', (socket) => {
 
     socket.on('disconnect', () => {
       console.log(`❌ ${userName} left room [${roomId}]`);
-      socket.to(roomId).emit('user-disconnected', userId, socket.id);
+      socket.to(roomId).emit('user-disconnected', socket.id);
       if (rooms[roomId]) {
         rooms[roomId] = rooms[roomId].filter(u => u.socketId !== socket.id);
         if (rooms[roomId].length === 0) delete rooms[roomId];

@@ -1,26 +1,29 @@
 /**
- * Room.jsx — WebRTC Video Room (patched)
+ * Room.jsx — WebRTC Video Room
  *
- * PATCH 1 — callerName from offer payload:
- *   socket.on('offer', (offer, fromSocketId, callerName)) now correctly
- *   passes callerName to addPeer() instead of 'Participant'.
+ * BUG FIXES in this version:
  *
- * PATCH 2 — room-participants seeds peerNames on join:
- *   When a user joins a room that already has participants, the server
- *   emits 'room-participants' with the list. We now iterate that list
- *   and add each as a peer entry so names appear immediately without
- *   waiting for the offer/answer flow.
+ * FIX 1 — Ghost "You" tile + remote camera never showing:
+ *   The previous "room-participants" handler created RTCPeerConnections
+ *   BEFORE getUserMedia resolved. When the real offer arrived, addPeer()
+ *   returned null (key already existed) so no tracks were ever added.
+ *   Solution: Remove room-participants PC creation entirely. Names only
+ *   come via the offer's callerName argument, which arrives after both
+ *   sides have live streams.
  *
- * PATCH 3 — user-disconnected socket argument fix:
- *   Server emits: socket.to(roomId).emit('user-disconnected', userId, socket.id)
- *   Room now calls removePeer(socketId) using the second argument (socketId),
- *   not the first (userId), matching how pcsRef is keyed.
+ * FIX 2 — pc.ontrack not updating the video element:
+ *   RemoteVideo received a plain object ref { current: MediaStream }.
+ *   When ontrack added tracks to that stream, the ref identity didn't
+ *   change, so React never re-rendered RemoteVideo, and the useEffect
+ *   that calls videoRef.srcObject = streamRef.current never re-ran.
+ *   Solution: Store the stream as real React state inside RemoteVideo
+ *   (passed as a MediaStream prop, not a ref). ontrack calls
+ *   setPeers(...) with the updated stream object, triggering a re-render
+ *   and a fresh srcObject assignment.
  *
- * PATCH 4 — Recording: local-first auto-download:
- *   On rec.onstop the blob immediately triggers an <a> download so the
- *   file lands in the user's Downloads folder. Metadata is then saved
- *   to the server via recordingAPI.save() in the background.
- *   recordingAPI.create() → recordingAPI.save() (matching api.js export).
+ * FIX 3 — user-disconnected argument mismatch:
+ *   Server now emits only socket.id. Room listens for that single arg
+ *   and passes it directly to removePeer().
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -41,20 +44,33 @@ const RTC_CONFIG = {
   ],
 };
 
-// ── RemoteVideo tile ──────────────────────────────────────────────────────────
-const RemoteVideo = React.memo(({ peerId, peerName, streamRef }) => {
+// ── RemoteVideo ───────────────────────────────────────────────────────────────
+// FIX 2: accepts `stream` as a real MediaStream prop (not a ref).
+// When the parent calls setPeers() with a new stream object, React re-renders
+// this component and the useEffect reassigns srcObject — making video/audio work.
+const RemoteVideo = React.memo(({ peerId, peerName, stream }) => {
   const videoRef = useRef(null);
+
   useEffect(() => {
-    if (videoRef.current && streamRef.current)
-      videoRef.current.srcObject = streamRef.current;
-  }, [streamRef]);
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+    }
+  }, [stream]); // re-runs every time a new MediaStream object arrives
+
   return (
     <div className="relative bg-slate-800 rounded-2xl overflow-hidden aspect-video
                     flex items-center justify-center">
       <video ref={videoRef} autoPlay playsInline
         className="w-full h-full object-cover" />
+      {/* Avatar fallback when no video track yet */}
+      <div className="absolute inset-0 flex items-center justify-center -z-0 pointer-events-none">
+        <div className="w-14 h-14 rounded-full bg-slate-600 flex items-center justify-center
+                        text-xl font-bold text-white">
+          {(peerName || 'P').charAt(0).toUpperCase()}
+        </div>
+      </div>
       <span className="absolute bottom-2 left-3 text-xs text-white/80 font-medium
-                       bg-black/40 px-2 py-0.5 rounded-full">
+                       bg-black/40 px-2 py-0.5 rounded-full z-10">
         {peerName}
       </span>
     </div>
@@ -143,18 +159,16 @@ const PreJoinLobby = ({ title, userName, onJoin, onCancel }) => {
           <button onClick={toggleCam}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm
                         transition-all duration-200
-                        ${camOn
-                          ? 'bg-slate-700 text-white hover:bg-slate-600'
-                          : 'bg-red-600 text-white hover:bg-red-700'}`}>
+                        ${camOn ? 'bg-slate-700 text-white hover:bg-slate-600'
+                                : 'bg-red-600 text-white hover:bg-red-700'}`}>
             {camOn ? <FaVideo /> : <FaVideoSlash />}
             {camOn ? 'Camera On' : 'Camera Off'}
           </button>
           <button onClick={toggleMic}
             className={`flex items-center gap-2 px-5 py-2.5 rounded-xl font-semibold text-sm
                         transition-all duration-200
-                        ${micOn
-                          ? 'bg-slate-700 text-white hover:bg-slate-600'
-                          : 'bg-red-600 text-white hover:bg-red-700'}`}>
+                        ${micOn ? 'bg-slate-700 text-white hover:bg-slate-600'
+                                : 'bg-red-600 text-white hover:bg-red-700'}`}>
             {micOn ? <FaMicrophone /> : <FaMicrophoneSlash />}
             {micOn ? 'Mic On' : 'Mic Off'}
           </button>
@@ -162,9 +176,7 @@ const PreJoinLobby = ({ title, userName, onJoin, onCancel }) => {
         <div className="flex gap-3">
           <button onClick={onCancel}
             className="flex-1 py-3 rounded-xl bg-slate-700 text-white font-semibold
-                       hover:bg-slate-600 transition-all duration-200">
-            Cancel
-          </button>
+                       hover:bg-slate-600 transition-all duration-200">Cancel</button>
           <button onClick={handleJoin} disabled={!ready}
             className="flex-1 py-3 rounded-xl bg-sage-500 text-white font-bold
                        hover:bg-sage-600 disabled:opacity-50 disabled:cursor-not-allowed
@@ -180,11 +192,13 @@ const PreJoinLobby = ({ title, userName, onJoin, onCancel }) => {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const formatMeetingTime = (isoDate) => {
   if (!isoDate) return 'Instant';
-  const d = new Date(isoDate);
+  const d   = new Date(isoDate);
   const now = new Date();
   const isToday = d.toDateString() === now.toDateString();
   const timeStr = d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-  return isToday ? `Today ${timeStr}` : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${timeStr}`;
+  return isToday
+    ? `Today ${timeStr}`
+    : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) + ` ${timeStr}`;
 };
 
 // ── MAIN ROOM ─────────────────────────────────────────────────────────────────
@@ -217,12 +231,15 @@ const Room = () => {
   const hasEndedMeeting   = useRef(false);
   const chatBottomRef     = useRef(null);
   const meetingStartRef   = useRef(null);
-  const pcsRef            = useRef(new Map());
+  const pcsRef            = useRef(new Map()); // socketId → { pc }
   const mediaRecorderRef  = useRef(null);
   const recordedChunksRef = useRef([]);
   const recordingStartRef = useRef(null);
 
   // ── State ─────────────────────────────────────────────────────────────────
+  // peers: [{ peerId, peerName, stream: MediaStream|null }]
+  // stream is a plain MediaStream stored in state so React re-renders
+  // RemoteVideo when new tracks arrive via pc.ontrack.
   const [peers,           setPeers]           = useState([]);
   const [micOn,           setMicOn]           = useState(false);
   const [videoOn,         setVideoOn]         = useState(false);
@@ -239,7 +256,7 @@ const Room = () => {
   const [endingCall,      setEndingCall]      = useState(false);
   const [recordingError,  setRecordingError]  = useState('');
   const [elapsed,         setElapsed]         = useState('00:00');
-  const [lastDownload,    setLastDownload]    = useState(null); // filename of last saved recording
+  const [lastDownload,    setLastDownload]    = useState(null);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -260,41 +277,65 @@ const Room = () => {
 
   // ── WebRTC helpers ────────────────────────────────────────────────────────
   const createPC = useCallback((peerId, peerName, localStream) => {
-    const pc        = new RTCPeerConnection(RTC_CONFIG);
-    const streamRef = { current: new MediaStream() };
+    const pc     = new RTCPeerConnection(RTC_CONFIG);
+    // Start with a fresh MediaStream — tracks arrive via ontrack
+    const stream = new MediaStream();
+
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
     pc.ontrack = (ev) => {
-      ev.streams[0]?.getTracks().forEach(t => streamRef.current.addTrack(t));
-      setPeers(prev => prev.map(p => p.peerId === peerId ? { ...p, streamRef } : p));
+      // Add the incoming track to the peer's stream
+      ev.streams[0]?.getTracks().forEach(t => {
+        if (!stream.getTracks().includes(t)) stream.addTrack(t);
+      });
+      // FIX 2: update state with the SAME stream object identity so React
+      // detects the change (we create a new MediaStream clone each time
+      // to force a prop change in RemoteVideo).
+      const updated = new MediaStream(stream.getTracks());
+      setPeers(prev =>
+        prev.map(p => p.peerId === peerId ? { ...p, stream: updated } : p)
+      );
     };
+
     pc.onicecandidate = (ev) => {
       if (ev.candidate && !isCleanedUp.current)
         socketRef.current?.emit('ice-candidate', ev.candidate, peerId);
     };
-    return { pc, streamRef };
+
+    pc.onconnectionstatechange = () => {
+      if (['disconnected','failed','closed'].includes(pc.connectionState))
+        removePeer(peerId);
+    };
+
+    return { pc, stream };
+  // removePeer declared below — safe to include because it uses useCallback
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const addPeer = useCallback((peerId, peerName, localStream) => {
     if (pcsRef.current.has(peerId)) return null;
-    const { pc, streamRef } = createPC(peerId, peerName, localStream);
-    pcsRef.current.set(peerId, { pc, streamRef });
-    setPeers(prev => [...prev, { peerId, peerName, streamRef }]);
+    const { pc, stream } = createPC(peerId, peerName, localStream);
+    pcsRef.current.set(peerId, { pc });
+    setPeers(prev => [...prev, { peerId, peerName, stream }]);
     return pc;
   }, [createPC]);
 
   const removePeer = useCallback((socketId) => {
     const e = pcsRef.current.get(socketId);
-    if (e) { try { e.pc.close(); } catch(_){} pcsRef.current.delete(socketId); }
+    if (e) { try { e.pc.close(); } catch (_) {} pcsRef.current.delete(socketId); }
     setPeers(prev => prev.filter(p => p.peerId !== socketId));
   }, []);
 
-  // ── Main Socket + Media — runs only after lobby join ──────────────────────
+  // ── Main Socket + Media ───────────────────────────────────────────────────
   useEffect(() => {
     if (!joined) return;
     isCleanedUp.current     = false;
     meetingStartRef.current = Date.now();
 
-    const socket = io(SOCKET_SERVER, { withCredentials: true, transports: ['websocket','polling'] });
+    const socket = io(SOCKET_SERVER, {
+      withCredentials: true,
+      transports: ['websocket', 'polling'],
+    });
     socketRef.current = socket;
 
     navigator.mediaDevices
@@ -302,6 +343,7 @@ const Room = () => {
       .then(async (stream) => {
         if (isCleanedUp.current) { stream.getTracks().forEach(t => t.stop()); return; }
 
+        // Apply lobby preferences
         const videoTrack = stream.getVideoTracks()[0];
         const audioTrack = stream.getAudioTracks()[0];
         if (videoTrack) videoTrack.enabled = initVideo;
@@ -312,33 +354,22 @@ const Room = () => {
         setMicOn(initAudio);
         setVideoOn(initVideo);
 
+        // Announce ourselves — server tells everyone else 'user-connected'
         socket.emit('join-room', roomId, socket.id, userName);
 
-        // PATCH 2: seed peer tiles from participants already in the room
-        socket.on('room-participants', (participants) => {
-          if (isCleanedUp.current) return;
-          participants.forEach(({ socketId, userName: pName }) => {
-            if (!pcsRef.current.has(socketId)) {
-              const { pc, streamRef } = createPC(socketId, pName || 'Participant', stream);
-              pcsRef.current.set(socketId, { pc, streamRef });
-              setPeers(prev => [
-                ...prev.filter(p => p.peerId !== socketId),
-                { peerId: socketId, peerName: pName || 'Participant', streamRef },
-              ]);
-            }
-          });
-        });
+        // ── Signaling ──────────────────────────────────────────────────────
 
-        socket.on('user-connected', async (uid, uname) => {
+        // Existing user gets notified → creates PC + sends offer
+        socket.on('user-connected', async (newSocketId, newUserName) => {
           if (isCleanedUp.current) return;
-          const pc = addPeer(uid, uname || 'Participant', stream);
+          const pc = addPeer(newSocketId, newUserName || 'Participant', stream);
           if (!pc) return;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.emit('offer', pc.localDescription, uid, userName);
+          socket.emit('offer', pc.localDescription, newSocketId, userName);
         });
 
-        // PATCH 1: callerName from offer payload
+        // New joiner receives offer → creates PC + sends answer
         socket.on('offer', async (inOffer, callerId, callerName) => {
           if (isCleanedUp.current) return;
           const pc = addPeer(callerId, callerName || 'Participant', stream);
@@ -362,8 +393,8 @@ const Room = () => {
           if (e) await e.pc.addIceCandidate(new RTCIceCandidate(cand)).catch(console.warn);
         });
 
-        // PATCH 3: server emits (userId, socketId) — key is socketId
-        socket.on('user-disconnected', (_userId, socketId) => {
+        // FIX 3: server now emits a single socketId argument
+        socket.on('user-disconnected', (socketId) => {
           removePeer(socketId);
         });
 
@@ -372,7 +403,7 @@ const Room = () => {
           setMessages(prev => [...prev, {
             user: senderId === socket.id ? 'You' : senderName,
             text: msg,
-            time: new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }),
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             mine: senderId === socket.id,
           }]);
         });
@@ -388,7 +419,7 @@ const Room = () => {
     return () => {
       isCleanedUp.current = true;
       myStreamRef.current?.getTracks().forEach(t => t.stop());
-      pcsRef.current.forEach(({ pc }) => { try { pc.close(); } catch(_){} });
+      pcsRef.current.forEach(({ pc }) => { try { pc.close(); } catch (_) {} });
       pcsRef.current.clear();
       socket.disconnect();
     };
@@ -437,14 +468,17 @@ const Room = () => {
     } catch (e) { console.error('Screen share failed:', e); }
   }, [screenShare, stopScreenShare]);
 
-  // PATCH 4: Local-first recording — auto-download immediately, then save metadata
   const startRecording = useCallback(() => {
     const stream = myStreamRef.current;
     if (!stream) return;
     setRecordingError('');
     setLastDownload(null);
-    const mimeType = ['video/webm;codecs=vp9,opus','video/webm;codecs=vp8,opus','video/webm','video/mp4']
-      .find(t => MediaRecorder.isTypeSupported(t)) || '';
+    const mimeType = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm',
+      'video/mp4',
+    ].find(t => MediaRecorder.isTypeSupported(t)) || '';
     try {
       const rec = new MediaRecorder(stream, mimeType ? { mimeType } : {});
       recordedChunksRef.current = [];
@@ -456,29 +490,16 @@ const Room = () => {
         const blob     = new Blob(recordedChunksRef.current, { type: mimeType || 'video/webm' });
         const ext      = mimeType.includes('mp4') ? 'mp4' : 'webm';
         const filename = `Amigo-${roomId}-${new Date().toISOString().slice(0,19).replace(/:/g,'-')}.${ext}`;
-
-        // ✅ Immediately download to user's local Downloads folder
-        const url = URL.createObjectURL(blob);
-        const a   = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        const url      = URL.createObjectURL(blob);
+        const a        = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 10000);
         setLastDownload(filename);
-
-        // Save metadata to server in the background (non-blocking)
         recordingAPI.save({
-          meetingId,
-          title:    `Recording — ${title}`,
-          duration: dur,
-          fileSize: blob.size,
-          fileUrl:  filename, // store filename as reference
-        }).catch(() => {
-          setRecordingError('Downloaded locally. Could not save record to server.');
-        });
-
+          meetingId, title: `Recording — ${title}`,
+          duration: dur, fileSize: blob.size, fileUrl: filename,
+        }).catch(() => setRecordingError('Downloaded locally. Could not save record to server.'));
         recordedChunksRef.current = [];
         setRecordingSaving(false);
       };
@@ -542,8 +563,8 @@ const Room = () => {
   if (!joined) {
     return (
       <PreJoinLobby
-        title={title} userName={userName} isHost={isHost} meetingId={meetingId}
-        roomId={roomId} onJoin={handleLobbyJoin} onCancel={handleLobbyCancel}
+        title={title} userName={userName}
+        onJoin={handleLobbyJoin} onCancel={handleLobbyCancel}
       />
     );
   }
@@ -586,7 +607,6 @@ const Room = () => {
             </span>
           )}
           {recordingSaving && <span className="text-xs text-yellow-400">Saving…</span>}
-          {/* Show download confirmation badge */}
           {lastDownload && !isRecording && (
             <span className="flex items-center gap-1 text-xs text-green-400">
               <FaDownload className="text-[10px]" /> Saved to Downloads
@@ -594,7 +614,7 @@ const Room = () => {
           )}
           {recordingError && <span className="text-xs text-red-400">{recordingError}</span>}
           <span className="text-slate-400 text-xs">
-            {time.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}
+            {time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
           <button onClick={toggleFullscreen}
             className="w-8 h-8 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600
@@ -614,7 +634,8 @@ const Room = () => {
            : 'grid-cols-3' }`}>
 
           {/* LOCAL TILE */}
-          <div className="relative bg-slate-800 rounded-2xl overflow-hidden flex items-center justify-center">
+          <div className="relative bg-slate-800 rounded-2xl overflow-hidden
+                          flex items-center justify-center">
             <video ref={myVideoRef} autoPlay playsInline muted
               className={`w-full h-full object-cover transition-opacity duration-300
                           ${videoOn ? 'opacity-100' : 'opacity-0'}`} />
@@ -633,9 +654,14 @@ const Room = () => {
             </span>
           </div>
 
-          {/* REMOTE TILES */}
-          {peers.map(({ peerId, peerName, streamRef }) => (
-            <RemoteVideo key={peerId} peerId={peerId} peerName={peerName} streamRef={streamRef} />
+          {/* REMOTE TILES — stream is a real MediaStream in state */}
+          {peers.map(({ peerId, peerName, stream }) => (
+            <RemoteVideo
+              key={peerId}
+              peerId={peerId}
+              peerName={peerName}
+              stream={stream}
+            />
           ))}
         </div>
       </main>
@@ -673,7 +699,9 @@ const Room = () => {
           <button onClick={isRecording ? stopRecording : startRecording} disabled={recordingSaving}
             className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
                         transition-all duration-200
-                        ${isRecording ? 'bg-red-600/90 text-white animate-pulse' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+                        ${isRecording
+                          ? 'bg-red-600/90 text-white animate-pulse'
+                          : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             {isRecording ? <FaStop className="text-base" /> : <FaCircle className="text-base text-red-400" />}
             <span>{isRecording ? 'Stop Rec' : 'Record'}</span>
           </button>
@@ -681,7 +709,8 @@ const Room = () => {
             className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
                         transition-all duration-200 relative
                         ${sidePanelOpen && activeTab === 'participants'
-                          ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+                          ? 'bg-mint-600 text-white'
+                          : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             <FaUserFriends className="text-base" />
             <span>People</span>
             <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-mint-500
@@ -693,7 +722,8 @@ const Room = () => {
             className={`flex flex-col items-center gap-0.5 px-3 py-2 rounded-xl text-xs font-medium
                         transition-all duration-200
                         ${sidePanelOpen && activeTab === 'chat'
-                          ? 'bg-mint-600 text-white' : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
+                          ? 'bg-mint-600 text-white'
+                          : 'bg-slate-700 text-slate-200 hover:bg-slate-600'}`}>
             <FaComments className="text-base" />
             <span>Chat</span>
           </button>
@@ -701,7 +731,8 @@ const Room = () => {
         <div className="min-w-[60px] flex justify-end">
           <button onClick={handleEndCall} disabled={endingCall}
             className="flex flex-col items-center gap-0.5 px-4 py-2 rounded-xl text-xs font-bold
-                       bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 transition-all duration-200">
+                       bg-red-600 text-white hover:bg-red-700 disabled:opacity-60
+                       transition-all duration-200">
             <FaPhoneSlash className="text-base" />
             <span>{endingCall ? 'Ending…' : isHost ? 'End' : 'Leave'}</span>
           </button>
