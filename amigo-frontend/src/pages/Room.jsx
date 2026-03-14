@@ -1,22 +1,24 @@
 /**
  * Room.jsx — WebRTC Video Room
  *
- * BUG FIXES in this version:
+ * FIX 1 — Audio streaming:
+ *   ontrack now adds ev.track directly to the peer's MediaStream.
+ *   Previously we iterated ev.streams[0].getTracks() — in many browsers
+ *   audio and video fire as separate ontrack events and ev.streams[0]
+ *   can be empty for the audio event, so that track was silently dropped.
+ *   Using ev.track directly is always reliable.
  *
- * FIX 1 — Ghost "You" tile + remote camera never showing:
- *   Removed room-participants PC pre-creation. Names come via callerName on offer.
+ * FIX 2 — Name conflict:
+ *   Removed callerName from the client-side offer emit. The server now
+ *   looks up the sender's userName from its own rooms[] state and passes
+ *   it to the receiver — so the name is always authoritative.
  *
- * FIX 2 — pc.ontrack not updating the video element:
- *   stream stored as real React state (MediaStream) instead of a ref.
- *   ontrack creates a new MediaStream clone → triggers re-render → srcObject re-assigned.
+ * FIX 3 — Host badge:
+ *   Server tags the first joiner as isHost. RemoteVideo now accepts an
+ *   isHost prop and renders a HOST badge identical to the local tile.
  *
- * FIX 3 — user-disconnected argument mismatch:
- *   Server emits single socketId. Room passes it directly to removePeer().
- *
- * FIX 4 — Avatar circle always visible on top of remote video:
- *   Avatar is now conditionally rendered only when stream has no video tracks,
- *   matching how the local tile works. Previously -z-0 didn't actually stack
- *   it behind the <video> element.
+ * FIX 4 — Avatar hiding:
+ *   Avatar shown only when no live video track present.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
@@ -38,7 +40,7 @@ const RTC_CONFIG = {
 };
 
 // ── RemoteVideo ───────────────────────────────────────────────────────────────
-const RemoteVideo = React.memo(({ peerId, peerName, stream }) => {
+const RemoteVideo = React.memo(({ peerId, peerName, peerIsHost, stream }) => {
   const videoRef = useRef(null);
 
   useEffect(() => {
@@ -47,8 +49,7 @@ const RemoteVideo = React.memo(({ peerId, peerName, stream }) => {
     }
   }, [stream]);
 
-  // Show avatar only when there are no video tracks yet (peer cam off or stream not arrived)
-  const hasVideo = stream && stream.getVideoTracks().length > 0
+  const hasVideo = stream
     && stream.getVideoTracks().some(t => t.enabled && t.readyState === 'live');
 
   return (
@@ -57,7 +58,6 @@ const RemoteVideo = React.memo(({ peerId, peerName, stream }) => {
       <video ref={videoRef} autoPlay playsInline
         className={`w-full h-full object-cover transition-opacity duration-300
                     ${hasVideo ? 'opacity-100' : 'opacity-0'}`} />
-      {/* Avatar — only shown when no live video track */}
       {!hasVideo && (
         <div className="absolute inset-0 flex flex-col items-center justify-center">
           <div className="w-14 h-14 rounded-full bg-slate-600 flex items-center justify-center
@@ -66,10 +66,17 @@ const RemoteVideo = React.memo(({ peerId, peerName, stream }) => {
           </div>
         </div>
       )}
-      <span className="absolute bottom-2 left-3 text-xs text-white/80 font-medium
-                       bg-black/40 px-2 py-0.5 rounded-full z-10">
-        {peerName}
-      </span>
+      {/* Name + host badge */}
+      <div className="absolute bottom-2 left-3 flex items-center gap-1.5 z-10">
+        <span className="text-xs text-white/80 font-medium bg-black/40 px-2 py-0.5 rounded-full">
+          {peerName}
+        </span>
+        {peerIsHost && (
+          <span className="text-[10px] bg-sage-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+            HOST
+          </span>
+        )}
+      </div>
     </div>
   );
 });
@@ -228,12 +235,13 @@ const Room = () => {
   const hasEndedMeeting   = useRef(false);
   const chatBottomRef     = useRef(null);
   const meetingStartRef   = useRef(null);
-  const pcsRef            = useRef(new Map());
+  const pcsRef            = useRef(new Map()); // socketId → { pc }
   const mediaRecorderRef  = useRef(null);
   const recordedChunksRef = useRef([]);
   const recordingStartRef = useRef(null);
 
   // ── State ─────────────────────────────────────────────────────────────────
+  // peers: [{ peerId, peerName, peerIsHost, stream: MediaStream|null }]
   const [peers,           setPeers]           = useState([]);
   const [micOn,           setMicOn]           = useState(false);
   const [videoOn,         setVideoOn]         = useState(false);
@@ -270,16 +278,19 @@ const Room = () => {
   }, [messages]);
 
   // ── WebRTC helpers ────────────────────────────────────────────────────────
-  const createPC = useCallback((peerId, peerName, localStream) => {
+  const createPC = useCallback((peerId, localStream) => {
     const pc     = new RTCPeerConnection(RTC_CONFIG);
     const stream = new MediaStream();
 
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
     pc.ontrack = (ev) => {
-      ev.streams[0]?.getTracks().forEach(t => {
-        if (!stream.getTracks().includes(t)) stream.addTrack(t);
-      });
+      // FIX 1: use ev.track directly — reliable for both audio and video.
+      // ev.streams[0] can be empty when the audio track event fires separately.
+      if (!stream.getTracks().find(t => t.id === ev.track.id)) {
+        stream.addTrack(ev.track);
+      }
+      // Clone stream to force React prop change → RemoteVideo re-renders → srcObject re-assigned
       const updated = new MediaStream(stream.getTracks());
       setPeers(prev =>
         prev.map(p => p.peerId === peerId ? { ...p, stream: updated } : p)
@@ -300,11 +311,11 @@ const Room = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const addPeer = useCallback((peerId, peerName, localStream) => {
+  const addPeer = useCallback((peerId, peerName, peerIsHost, localStream) => {
     if (pcsRef.current.has(peerId)) return null;
-    const { pc, stream } = createPC(peerId, peerName, localStream);
+    const { pc, stream } = createPC(peerId, localStream);
     pcsRef.current.set(peerId, { pc });
-    setPeers(prev => [...prev, { peerId, peerName, stream }]);
+    setPeers(prev => [...prev, { peerId, peerName, peerIsHost: !!peerIsHost, stream }]);
     return pc;
   }, [createPC]);
 
@@ -343,18 +354,25 @@ const Room = () => {
 
         socket.emit('join-room', roomId, socket.id, userName);
 
-        socket.on('user-connected', async (newSocketId, newUserName) => {
+        // ── Signaling ────────────────────────────────────────────────────
+
+        // Existing user: notified of new joiner → create PC + send offer
+        // FIX 2: server now sends authoritative name; no callerName in offer emit
+        socket.on('user-connected', async (newSocketId, newUserName, newIsHost) => {
           if (isCleanedUp.current) return;
-          const pc = addPeer(newSocketId, newUserName || 'Participant', stream);
+          const pc = addPeer(newSocketId, newUserName || 'Participant', newIsHost, stream);
           if (!pc) return;
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
-          socket.emit('offer', pc.localDescription, newSocketId, userName);
+          // Only pass targetSocketId — server resolves our name server-side
+          socket.emit('offer', pc.localDescription, newSocketId);
         });
 
-        socket.on('offer', async (inOffer, callerId, callerName) => {
+        // New joiner: receives offer from existing user
+        // FIX 2: callerName + callerIsHost now come from server rooms[] lookup
+        socket.on('offer', async (inOffer, callerId, callerName, callerIsHost) => {
           if (isCleanedUp.current) return;
-          const pc = addPeer(callerId, callerName || 'Participant', stream);
+          const pc = addPeer(callerId, callerName || 'Participant', callerIsHost, stream);
           if (!pc) return;
           await pc.setRemoteDescription(new RTCSessionDescription(inOffer));
           const ans = await pc.createAnswer();
@@ -628,19 +646,27 @@ const Room = () => {
                 </div>
               </div>
             )}
-            <span className="absolute bottom-2 left-3 flex items-center gap-1.5
-                             text-xs text-white/80 bg-black/40 px-2 py-0.5 rounded-full">
-              {userName} (You)
-              {!micOn && <FaMicrophoneSlash className="text-red-400 text-[10px]" />}
-            </span>
+            <div className="absolute bottom-2 left-3 flex items-center gap-1.5">
+              <span className="text-xs text-white/80 bg-black/40 px-2 py-0.5 rounded-full
+                               flex items-center gap-1">
+                {userName} (You)
+                {!micOn && <FaMicrophoneSlash className="text-red-400 text-[10px]" />}
+              </span>
+              {isHost && (
+                <span className="text-[10px] bg-sage-600 text-white px-1.5 py-0.5 rounded-full font-bold">
+                  HOST
+                </span>
+              )}
+            </div>
           </div>
 
           {/* REMOTE TILES */}
-          {peers.map(({ peerId, peerName, stream }) => (
+          {peers.map(({ peerId, peerName, peerIsHost, stream }) => (
             <RemoteVideo
               key={peerId}
               peerId={peerId}
               peerName={peerName}
+              peerIsHost={peerIsHost}
               stream={stream}
             />
           ))}
@@ -773,6 +799,7 @@ const Room = () => {
         {/* Participants */}
         {activeTab === 'participants' && (
           <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            {/* Local user */}
             <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-700/50">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-full bg-sage-600 flex items-center justify-center
@@ -791,13 +818,19 @@ const Room = () => {
                 {micOn   ? <FaMicrophone className="text-sage-400" /> : <FaMicrophoneSlash className="text-red-400" />}
               </div>
             </div>
-            {peers.map(({ peerId, peerName }) => (
+            {/* Remote peers */}
+            {peers.map(({ peerId, peerName, peerIsHost }) => (
               <div key={peerId} className="flex items-center gap-2.5 p-2.5 rounded-xl bg-slate-700/30">
                 <div className="w-8 h-8 rounded-full bg-mint-600 flex items-center justify-center
                                 text-sm font-bold text-white">
                   {(peerName || 'P').charAt(0).toUpperCase()}
                 </div>
-                <p className="text-sm text-slate-200">{peerName || 'Participant'}</p>
+                <div>
+                  <p className="text-sm text-slate-200">{peerName || 'Participant'}</p>
+                  {peerIsHost && (
+                    <span className="text-[10px] bg-sage-600 text-white px-1.5 py-0.5 rounded-full">HOST</span>
+                  )}
+                </div>
               </div>
             ))}
             <button onClick={copyRoomId}

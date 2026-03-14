@@ -42,7 +42,7 @@ const io = new Server(server, {
 notifCtrl.setIo(io);
 notifCtrl.startReminderCron();
 
-// Room tracking: { roomId: [{ socketId, userId, userName }] }
+// rooms: { roomId: [{ socketId, userName, isHost }] }
 const rooms = {};
 
 io.on('connection', (socket) => {
@@ -55,21 +55,28 @@ io.on('connection', (socket) => {
   socket.on('join-room', (roomId, _clientUserId, userName) => {
     socket.join(roomId);
     if (!rooms[roomId]) rooms[roomId] = [];
-    rooms[roomId].push({ socketId: socket.id, userName });
 
-    console.log(`✅ ${userName} joined room [${roomId}] — ${rooms[roomId].length} user(s)`);
+    // First person in the room is the host
+    const isHost = rooms[roomId].length === 0;
+    rooms[roomId].push({ socketId: socket.id, userName, isHost });
 
-    // FIX: emit socket.id as the peer identifier so the existing user
-    // keys their PC map by socketId — consistent with how answer/ice route.
-    // Also pass userName so the receiver can label the tile immediately.
-    socket.to(roomId).emit('user-connected', socket.id, userName);
+    console.log(`✅ ${userName}${isHost ? ' [HOST]' : ''} joined room [${roomId}] — ${rooms[roomId].length} user(s)`);
 
-    // Tell the new joiner who is already present (name map only, no PC created)
+    // Tell everyone already in the room that a new user joined
+    // Use server-side userName — never trust the client-sent callerName
+    socket.to(roomId).emit('user-connected', socket.id, userName, false);
+
+    // Tell the new joiner who is already present (with host flags)
     const others = rooms[roomId].filter(u => u.socketId !== socket.id);
     socket.emit('room-participants', others);
 
-    socket.on('offer', (offer, targetSocketId, callerName) => {
-      io.to(targetSocketId).emit('offer', offer, socket.id, callerName || userName);
+    // ── Signaling ──────────────────────────────────────────────────────
+    socket.on('offer', (offer, targetSocketId) => {
+      // Look up sender's server-side name — fixes name conflict bug
+      const sender = rooms[roomId]?.find(u => u.socketId === socket.id);
+      const senderName = sender?.userName || userName;
+      const senderIsHost = sender?.isHost || false;
+      io.to(targetSocketId).emit('offer', offer, socket.id, senderName, senderIsHost);
     });
 
     socket.on('answer', (answer, targetSocketId) => {
