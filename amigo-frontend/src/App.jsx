@@ -30,7 +30,14 @@ function App() {
 
           {/* ── Protected ── */}
           <Route path="/dashboard"        element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/user-profile"     element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+
+          {/* Profile: canonical path + /profile alias used by Header */}
+          <Route path="/user-profile" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+          <Route path="/profile"      element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+
+          {/* Settings: redirect to profile until a dedicated Settings page is built */}
+          <Route path="/settings" element={<Navigate to="/user-profile" replace />} />
+
           <Route path="/schedule-meeting" element={<ProtectedRoute><ScheduleMeeting /></ProtectedRoute>} />
           <Route path="/join"             element={<ProtectedRoute><JoinMeeting /></ProtectedRoute>} />
           <Route path="/new-meeting"      element={<ProtectedRoute><NewMeeting /></ProtectedRoute>} />

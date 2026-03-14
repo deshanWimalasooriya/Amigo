@@ -55,6 +55,13 @@ module.exports = (sequelize, Sequelize) => {
       type: Sequelize.DATE,
       allowNull: true,
     },
+    // Tracks whether the 10-minute pre-meeting reminder has been sent
+    // so the cron job doesn’t fire twice for the same meeting.
+    reminderSent: {
+      type: Sequelize.BOOLEAN,
+      allowNull: false,
+      defaultValue: false,
+    },
   });
 
   return Meeting;
