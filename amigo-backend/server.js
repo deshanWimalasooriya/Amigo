@@ -100,7 +100,24 @@ db.sequelize.sync()
 
 // --- START SERVER ---
 const PORT = process.env.PORT || 5000;
+// ✅ FIXED
 server.listen(PORT, () => {
+<<<<<<< HEAD
     console.log(`\n🚀 Server running on port ${PORT}`);
     console.log(`🔗 Test it here: http://localhost:${PORT}`);
 });
+=======
+    console.log('\n==================================================');
+    console.log(`🚀 Server  | Amigo Backend running on PORT: ${PORT}`);
+    console.log(`🔗 Server  | URL: http://localhost:${PORT}`);
+    console.log(`⚙️  Config  | Environment: ${process.env.NODE_ENV || 'development'}`);
+    console.log(`📡 WebRTC  | Socket.IO Signaling is ACTIVE`);
+    console.log('==================================================\n');
+    console.log(`   Auth          → /api/auth`);
+    console.log(`   Meetings      → /api/meetings`);
+    console.log(`   Recordings    → /api/recordings`);
+    console.log(`   Teams         → /api/teams`);
+    console.log(`   Notifications → /api/notifications`);
+});
+
+>>>>>>> f266092 (fix(server.js))
