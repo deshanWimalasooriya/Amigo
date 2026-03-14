@@ -124,6 +124,13 @@ const AuthForm = () => {
         </div>
       </div>
 
+      {/* Error Banner */}
+      {error && (
+        <div className="auth-error-banner">
+          ⚠️ {error}
+        </div>
+      )}
+
       {/* ── RIGHT — Form panel ── */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 bg-beige-50">
         <div className="w-full max-w-md animate-slide-up">
@@ -230,3 +237,4 @@ const AuthForm = () => {
 };
 
 export default AuthForm;
+

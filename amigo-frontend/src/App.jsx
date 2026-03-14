@@ -18,6 +18,22 @@ import History         from './pages/History.jsx';
 import Team            from './pages/Team.jsx';
 import './index.css';
 
+// ─── Protected Route Guard ───────────────────────────────────────────────────
+// If user is not logged in, redirect to /auth.
+// Otherwise render the requested page as normal.
+const ProtectedRoute = ({ children }) => {
+  const { user } = useAuth();
+  return user ? children : <Navigate to="/auth" replace />;
+};
+
+// ─── Public Route Guard ─────────────────────────────────────────────────────
+// Prevents already logged-in users from going back to /auth or /.
+// Redirects them straight to /dashboard instead.
+const PublicRoute = ({ children }) => {
+  const { user } = useAuth();
+  return user ? <Navigate to="/dashboard" replace /> : children;
+};
+
 function App() {
   return (
     <Router>
@@ -56,3 +72,4 @@ function App() {
 }
 
 export default App;
+
