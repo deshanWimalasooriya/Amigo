@@ -1,6 +1,6 @@
 require('dotenv').config();
 const express = require('express');
-const http = require('http'); 
+const http = require('http');
 const { Server } = require("socket.io");
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
@@ -8,116 +8,137 @@ const db = require("./api/models");
 
 // Initialize App
 const app = express();
-const server = http.createServer(app); 
+const server = http.createServer(app);
 
 // --- MIDDLEWARE ---
 app.use(cors({
-    origin: "http://localhost:3000", // Frontend URL
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE"]
+  origin: allowedOrigins,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
 }));
-
 app.use(express.json());
 app.use(cookieParser());
 
-// --- SOCKET.IO SETUP ---
-const io = new Server(server, {
-    cors: {
-        origin: "http://localhost:3000", // Match Frontend Port
-        methods: ["GET", "POST"],
-        credentials: true
-    }
-});
-
-// Basic Test Route
-app.get('/', (req, res) => {
-    res.send("✅ Amigo Backend Server is Running!");
-});
-
-// --- CRITICAL WEBRTC SOCKET LOGIC ---
-// I have moved the logic here to ensure it works without conflicts
-io.on("connection", (socket) => {
-    console.log(`⚡ New Connection: ${socket.id}`);
-
-    // 1. Join Room
-    socket.on("join-room", ({ roomId, userId, userName }) => {
-        socket.join(roomId);
-        // Broadcast to everyone ELSE in the room that a user joined
-        socket.to(roomId).emit("user-connected", { 
-            userName, 
-            socketId: socket.id 
-        });
-    });
-
-    // 2. Call User (One-to-One Signal)
-    // Important: We send this ONLY to the specific userToCall, not everyone
-    socket.on("call-user", ({ userToCall, signalData, from, name }) => {
-        io.to(userToCall).emit("call-made", { 
-            signal: signalData, 
-            from, 
-            name 
-        });
-    });
-
-    // 3. Answer Call (One-to-One Signal)
-    socket.on("answer-call", ({ signal, to }) => {
-        io.to(to).emit("call-answered", { signal, answeredBy: socket.id });
-    });
-
-    // 4. Chat Messages
-    socket.on("send-message", ({ roomId, message, userName, time }) => {
-        socket.to(roomId).emit("receive-message", { message, userName, time });
-    });
-
-    // 5. Disconnect
-    socket.on("disconnect", () => {
-        socket.broadcast.emit("user-disconnected", socket.id);
-        console.log(`❌ User Disconnected: ${socket.id}`);
-    });
-});
-
-// --- ROUTES ---
-const authRoutes = require('./api/routes/authRoutes');
-const userRoutes = require('./api/routes/userRoutes');
-const meetingRoutes = require('./api/routes/meetingRoutes');
-
-// Use Routes
 app.use('/api/auth', authRoutes);
-app.use('/api/users', userRoutes);
 app.use('/api/meetings', meetingRoutes);
+app.use('/api/recordings', recordingRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/notifications', notificationRoutes);
+app.use('/api/users', userRoutes);
 
-// NOTE: I removed the 'socketHandler(io)' lines because 
-// we are now handling sockets directly above to prevent duplicate signals.
+app.get('/', (req, res) => res.json({ status: '✅ Amigo Backend running', version: '2.0' }));
 
-// --- DATABASE CONNECTION ---
-db.sequelize.sync()
-  .then(() => {
-    console.log("✅ Synced database successfully.");
-  })
-  .catch((err) => {
-    console.log("❌ Failed to sync database: " + err.message);
+const io = new Server(server, {
+  cors: { origin: allowedOrigins, methods: ['GET', 'POST'], credentials: true },
+});
+
+notifCtrl.setIo(io);
+notifCtrl.startReminderCron();
+
+const rooms = {};
+
+io.on('connection', (socket) => {
+  console.log(`⚡ New connection: ${socket.id}`);
+
+  socket.on('register-user', (userId) => {
+    socket.join(`user:${userId}`);
   });
 
-// --- START SERVER ---
-const PORT = process.env.PORT || 5000;
-// ✅ FIXED
-server.listen(PORT, () => {
-<<<<<<< HEAD
-    console.log(`\n🚀 Server running on port ${PORT}`);
-    console.log(`🔗 Test it here: http://localhost:${PORT}`);
-});
-=======
-    console.log('\n==================================================');
-    console.log(`🚀 Server  | Amigo Backend running on PORT: ${PORT}`);
-    console.log(`🔗 Server  | URL: http://localhost:${PORT}`);
-    console.log(`⚙️  Config  | Environment: ${process.env.NODE_ENV || 'development'}`);
-    console.log(`📡 WebRTC  | Socket.IO Signaling is ACTIVE`);
-    console.log('==================================================\n');
-    console.log(`   Auth          → /api/auth`);
-    console.log(`   Meetings      → /api/meetings`);
-    console.log(`   Recordings    → /api/recordings`);
-    console.log(`   Teams         → /api/teams`);
-    console.log(`   Notifications → /api/notifications`);
+  socket.on('join-room', (roomId, _clientUserId, userName) => {
+    socket.join(roomId);
+    if (!rooms[roomId]) rooms[roomId] = [];
+
+    // First person in the room is the host
+    const isHost = rooms[roomId].length === 0;
+    rooms[roomId].push({ socketId: socket.id, userName, isHost });
+
+    console.log(`✅ ${userName}${isHost ? ' [HOST]' : ''} joined room [${roomId}] — ${rooms[roomId].length} user(s)`);
+
+    socket.to(roomId).emit('user-connected', socket.id, userName, false);
+
+    const others = rooms[roomId].filter((user) => user.socketId !== socket.id);
+    socket.emit('room-participants', others);
+
+    socket.on('offer', (offer, targetSocketId) => {
+      const sender = rooms[roomId]?.find((user) => user.socketId === socket.id);
+      const senderName = sender?.userName || userName;
+      const senderIsHost = sender?.isHost || false;
+      io.to(targetSocketId).emit('offer', offer, socket.id, senderName, senderIsHost);
+    });
+
+    socket.on('answer', (answer, targetSocketId) => {
+      io.to(targetSocketId).emit('answer', answer, socket.id);
+    });
+
+    socket.on('ice-candidate', (candidate, targetSocketId) => {
+      io.to(targetSocketId).emit('ice-candidate', candidate, socket.id);
+    });
+
+    socket.on('chat-message', (message, senderName) => {
+      io.in(roomId).emit('chat-message', message, senderName, socket.id);
+    });
+
+    socket.on('toggle-audio', (isMuted) => {
+      socket.to(roomId).emit('peer-audio-toggle', socket.id, isMuted);
+    });
+
+    socket.on('toggle-video', (isOff) => {
+      socket.to(roomId).emit('peer-video-toggle', socket.id, isOff);
+    });
+
+    socket.on('screen-share-started', () => {
+      socket.to(roomId).emit('peer-screen-share-started', socket.id);
+    });
+
+    socket.on('screen-share-stopped', () => {
+      socket.to(roomId).emit('peer-screen-share-stopped', socket.id);
+    });
+
+    socket.on('disconnect', () => {
+      console.log(`❌ ${userName} left room [${roomId}]`);
+      socket.to(roomId).emit('user-disconnected', socket.id);
+      if (rooms[roomId]) {
+        rooms[roomId] = rooms[roomId].filter((user) => user.socketId !== socket.id);
+        if (rooms[roomId].length === 0) delete rooms[roomId];
+      }
+    });
+  });
+
+  socket.on('call-user', ({ userToCall, signalData, from, name }) => {
+    io.to(userToCall).emit('call-made', { signal: signalData, from, name });
+  });
+
+  socket.on('answer-call', ({ signal, to }) => {
+    io.to(to).emit('call-answered', { signal, answeredBy: socket.id });
+  });
+
+  socket.on('send-message', ({ roomId, message, userName, time }) => {
+    io.to(roomId).emit('receive-message', { message, userName, time });
+  });
+
+  socket.on('disconnect', () => {
+    socket.broadcast.emit('user-disconnected', socket.id);
+    console.log(`❌ Disconnected: ${socket.id}`);
+  });
 });
 
->>>>>>> f266092 (fix(server.js))
+db.sequelize.sync({ alter: true })
+  .then(() => console.log('✅ Database synced (alter mode).'))
+  .catch((err) => console.error('❌ DB sync failed:', err.message));
+
+const PORT = process.env.PORT || 5000;
+server.listen(PORT, () => {
+  console.log('\n==================================================');
+  console.log(`🚀 Server  | Amigo Backend running on PORT: ${PORT}`);
+  console.log(`🔗 Server  | URL: http://localhost:${PORT}`);
+  console.log(`⚙️  Config  | Environment: ${process.env.NODE_ENV || 'development'}`);
+  console.log(`📡 WebRTC  | Socket.IO Signaling is ACTIVE`);
+  console.log('==================================================\n');
+  console.log('   Auth          → /api/auth');
+  console.log('   Meetings      → /api/meetings');
+  console.log('   Recordings    → /api/recordings');
+  console.log('   Teams         → /api/teams');
+  console.log('   Notifications → /api/notifications');
+  console.log('   Users         → /api/users');
+});
+
