@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .launch-wrapper {
   min-height: 100vh;
   background-color: #0f172a;
@@ -202,3 +203,6 @@
 .hidden {
     display: none;
 }
+=======
+/* NewMeeting.css — DEPRECATED: component uses Tailwind classes */
+>>>>>>> ravindu/master

@@ -6,7 +6,10 @@ const {
   getMyMeetings,
   getMeetingHistory,
   getMeetingByRoomId,
+<<<<<<< HEAD
   joinMeeting,
+=======
+>>>>>>> ravindu/master
   startMeeting,
   endMeeting,
   updateMeeting,
@@ -17,6 +20,7 @@ const {
 // All routes require authentication
 router.use(protect);
 
+<<<<<<< HEAD
 router.post('/',                createMeeting);      // POST   /api/meetings
 router.get('/my',               getMyMeetings);      // GET    /api/meetings/my
 router.get('/history',          getMeetingHistory);  // GET    /api/meetings/history
@@ -27,5 +31,16 @@ router.put('/:roomId',          updateMeeting);      // PUT    /api/meetings/:ro
 router.put('/:roomId/start',    startMeeting);       // PUT    /api/meetings/:roomId/start
 router.put('/:roomId/end',      endMeeting);         // PUT    /api/meetings/:roomId/end
 router.delete('/:roomId',       deleteMeeting);      // DELETE /api/meetings/:roomId
+=======
+router.post('/',              createMeeting);      // POST   /api/meetings
+router.get('/my',             getMyMeetings);      // GET    /api/meetings/my
+router.get('/history',        getMeetingHistory);  // GET    /api/meetings/history
+router.get('/stats',          getDashboardStats);  // GET    /api/meetings/stats
+router.get('/:roomId',        getMeetingByRoomId); // GET    /api/meetings/:roomId
+router.put('/:roomId',        updateMeeting);      // PUT    /api/meetings/:roomId
+router.put('/:roomId/start',  startMeeting);       // PUT    /api/meetings/:roomId/start
+router.put('/:roomId/end',    endMeeting);         // PUT    /api/meetings/:roomId/end
+router.delete('/:roomId',     deleteMeeting);      // DELETE /api/meetings/:roomId
+>>>>>>> ravindu/master
 
 module.exports = router;

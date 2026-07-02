@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .meetings-wrapper {
   min-height: 100vh;
   background-color: #0f172a;
@@ -174,3 +175,11 @@
 .hidden {
     display: none;
 }
+=======
+/*
+ * MyMeetings.css — DEPRECATED
+ *
+ * MyMeetings.jsx has been fully rebuilt in Tailwind CSS.
+ * This file is intentionally empty. All dark overrides removed.
+ */
+>>>>>>> ravindu/master

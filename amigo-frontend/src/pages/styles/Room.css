@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .room-container {
   height: 100vh; /* Strict viewport height */
   width: 100vw;
@@ -307,3 +308,11 @@
     height: 100%;
     color: #94a3b8;
 }
+=======
+/*
+ * Room.css — The meeting Room UI intentionally keeps a dark charcoal theme
+ * for eye comfort during video calls (industry standard: Zoom, Meet, Teams).
+ * Room.jsx uses its own bg-charcoal-950 class, separate from the app theme.
+ * This file is empty — all Room styles are inline Tailwind in Room.jsx.
+ */
+>>>>>>> ravindu/master
