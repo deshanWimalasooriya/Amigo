@@ -1,11 +1,31 @@
 const express = require('express');
-const router = express.Router();
-const { createMeeting, getMyMeetings } = require('../controllers/meetingController');
-const { protect } = require('../middleware/authMiddleware');
+const router  = express.Router();
+const protect = require('../middleware/protect');
+const {
+  createMeeting,
+  getMyMeetings,
+  getMeetingHistory,
+  getMeetingByRoomId,
+  joinMeeting,
+  startMeeting,
+  endMeeting,
+  updateMeeting,
+  deleteMeeting,
+  getDashboardStats,
+} = require('../controllers/meetingController');
 
-// Matches /api/meetings
-router.route('/')
-  .post(protect, createMeeting)  // Save Meeting
-  .get(protect, getMyMeetings);  // Get List
+// All routes require authentication
+router.use(protect);
+
+router.post('/',                createMeeting);      // POST   /api/meetings
+router.get('/my',               getMyMeetings);      // GET    /api/meetings/my
+router.get('/history',          getMeetingHistory);  // GET    /api/meetings/history
+router.get('/stats',            getDashboardStats);  // GET    /api/meetings/stats
+router.get('/:roomId',          getMeetingByRoomId); // GET    /api/meetings/:roomId
+router.post('/:roomId/join',    joinMeeting);        // POST   /api/meetings/:roomId/join
+router.put('/:roomId',          updateMeeting);      // PUT    /api/meetings/:roomId
+router.put('/:roomId/start',    startMeeting);       // PUT    /api/meetings/:roomId/start
+router.put('/:roomId/end',      endMeeting);         // PUT    /api/meetings/:roomId/end
+router.delete('/:roomId',       deleteMeeting);      // DELETE /api/meetings/:roomId
 
 module.exports = router;

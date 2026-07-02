@@ -1,72 +1,128 @@
-import React, { createContext, useState, useEffect, useContext } from 'react';
-import api from '../api/axios';
+/**
+ * AuthContext — global authentication state
+ *
+ * FIX: User object is now persisted to localStorage as a warm-start cache.
+ * On page refresh, we immediately restore from localStorage (so ProtectedRoute
+ * doesn't flash-redirect to /auth) while the /api/auth/me verification runs
+ * in the background. If /me returns 401, we clear the cache and redirect.
+ *
+ * ADDITION: After a successful session verification, we emit 'register-user'
+ * on a shared Socket.IO connection so the server can push real-time
+ * notifications (bell badge) to this specific user.
+ */
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { io } from 'socket.io-client';
 
-const AuthContext = createContext();
+const API        = import.meta.env.VITE_API_URL    || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_SERVER || 'http://localhost:5000';
+const CACHE_KEY  = 'amigo_user';
+
+// Module-level socket — created once, shared across the app for notifications.
+// This is separate from the per-room socket created inside Room.jsx.
+let notifSocket = null;
+
+export const getNotifSocket = () => notifSocket;
+
+const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null); // Stores user data (id, name, pmi)
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  // 1. Check if user is logged in (Hydration)
-  // We can add a specialized endpoint '/api/auth/me' later to verify cookie on reload.
-  // For now, we will rely on local state or persisting it manually if needed.
-  useEffect(() => {
-    const storedUser = localStorage.getItem('user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
+  const cached = (() => {
+    try { return JSON.parse(localStorage.getItem(CACHE_KEY)); }
+    catch { return null; }
+  })();
+
+  const [user,    setUser]    = useState(cached);
+  const [loading, setLoading] = useState(true);
+
+  // ── Register user with socket for live notification pushes ──────────────
+  const registerSocket = useCallback((userId) => {
+    if (!userId) return;
+    if (!notifSocket || !notifSocket.connected) {
+      notifSocket = io(SOCKET_URL, {
+        withCredentials: true,
+        transports: ['websocket', 'polling'],
+      });
     }
-    setLoading(false);
+    notifSocket.emit('register-user', userId);
   }, []);
 
-  // 2. Login Function
-  const login = async (email, password) => {
-    try {
-      const response = await api.post('/auth/login', { email, password });
-      setUser(response.data);
-      // Save basic info to localStorage so we don't lose it on refresh
-      localStorage.setItem('user', JSON.stringify(response.data));
-      navigate('/dashboard');
-      return { success: true };
-    } catch (error) {
-      console.error("Login Failed:", error.response?.data?.message);
-      return { success: false, error: error.response?.data?.message || "Login failed" };
-    }
-  };
+  // ── Session verification on mount ────────────────────────────────────────
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const res = await fetch(`${API}/api/auth/me`, {
+          method: 'GET',
+          credentials: 'include',
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setUser(data);
+          localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+          // ✅ Register with socket so notifications arrive in real-time
+          registerSocket(data.id);
+        } else {
+          setUser(null);
+          localStorage.removeItem(CACHE_KEY);
+          notifSocket?.disconnect();
+          notifSocket = null;
+          const pub = ['/', '/auth'];
+          if (!pub.includes(window.location.pathname)) {
+            navigate('/auth', { replace: true });
+          }
+        }
+      } catch {
+        // Network error — keep cached user, don't redirect
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkSession();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // 3. Register Function
-  const register = async (fullName, email, password) => {
-    try {
-      const response = await api.post('/auth/register', { fullName, email, password });
-      setUser(response.data);
-      localStorage.setItem('user', JSON.stringify(response.data));
-      navigate('/dashboard');
-      return { success: true };
-    } catch (error) {
-      console.error("Registration Failed:", error.response?.data?.message);
-      return { success: false, error: error.response?.data?.message || "Registration failed" };
-    }
-  };
+  const login = useCallback((userData) => {
+    setUser(userData);
+    localStorage.setItem(CACHE_KEY, JSON.stringify(userData));
+    // Register immediately on login
+    registerSocket(userData.id);
+  }, [registerSocket]);
 
-  // 4. Logout Function
-  const logout = async () => {
+  const updateUser = useCallback((updatedData) => {
+    setUser(prev => {
+      const next = { ...prev, ...updatedData };
+      localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  const logout = useCallback(async () => {
     try {
-      await api.post('/auth/logout');
-      setUser(null);
-      localStorage.removeItem('user');
-      navigate('/login');
-    } catch (error) {
-      console.error("Logout Error", error);
-    }
-  };
+      await fetch(`${API}/api/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch { /* ignore */ }
+    notifSocket?.disconnect();
+    notifSocket = null;
+    setUser(null);
+    localStorage.removeItem(CACHE_KEY);
+    navigate('/auth', { replace: true });
+  }, [navigate]);
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading }}>
-      {!loading && children}
+    <AuthContext.Provider value={{ user, loading, login, logout, updateUser }}>
+      {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom Hook to use Auth easily
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
+  return ctx;
+};
+
+export default AuthContext;
