@@ -3,7 +3,7 @@
   width: 100%;
   max-width: 420px;
   background: rgba(30, 41, 59, 0.75); /* Dark Slate */
-  backdrop-filter: blur(20px);         /* Strong Blur */
+  backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 24px;
@@ -11,7 +11,9 @@
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   color: white;
   transition: all 0.3s ease;
-  overflow: hidden; /* Keeps animations inside */
+  /* overflow: hidden removed to allow tooltips/focus rings if needed, 
+     but kept if you want to clip internal animations strictly */
+  overflow: hidden; 
 }
 
 /* Header */
@@ -23,12 +25,14 @@
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+  text-align: center;
 }
 
 .auth-header p {
   color: #94a3b8;
   font-size: 0.95rem;
   margin-bottom: 2rem;
+  text-align: center;
 }
 
 /* Input Fields */
@@ -45,6 +49,7 @@
   color: #94a3b8;
   font-size: 1.1rem;
   z-index: 10;
+  pointer-events: none; /* Allows clicking through icon to input */
 }
 
 .input-group input {
@@ -69,6 +74,7 @@
 .forgot-pass {
   text-align: right;
   margin-bottom: 1.5rem;
+  margin-top: -0.5rem; /* Pull it up slightly */
 }
 
 .forgot-pass a {

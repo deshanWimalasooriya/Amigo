@@ -1,68 +1,210 @@
-import React, { useState } from 'react';
+<<<<<<< HEAD
+=======
+/**
+ * NewMeeting.jsx
+ * - CAMERA BUG FIX: preview uses real getUserMedia, stream stopped on unmount
+ * - Full Tailwind rebuild, NewMeeting.css purged
+ */
+>>>>>>> ravindu/master
+import React, { useState, useEffect, useRef } from 'react';
 import Header from '../components/Header';
+import Footer from '../components/Footer';
 import { useNavigate } from 'react-router-dom';
-import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, FaRocket, FaIdBadge, FaRandom, FaCopy } from 'react-icons/fa';
+<<<<<<< HEAD
+import { useAuth } from '../context/AuthContext'; // 1. Import Auth Context
+import { FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash, FaRocket, FaIdBadge, FaRandom } from 'react-icons/fa';
 import './styles/NewMeeting.css';
 
 const NewMeeting = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // 2. Get Real User Data
+  const videoRef = useRef(null); // Ref for accessing the video element
+=======
+import {
+  FaVideo, FaVideoSlash, FaMicrophone, FaMicrophoneSlash,
+  FaRocket, FaIdBadge, FaRandom, FaLock,
+} from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext';
+import { meetingAPI } from '../services/api';
 
-  // Host Configuration State
+const NewMeeting = () => {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+
+  const videoRef  = useRef(null);
+  const streamRef = useRef(null);
+>>>>>>> ravindu/master
+
   const [config, setConfig] = useState({
-    topic: "Alex's Instant Meeting",
+<<<<<<< HEAD
+    topic: user ? `${user.firstName}'s Instant Meeting` : "My Meeting",
     usePMI: false,
-    passcode: "882910", // Random default
+    passcode: Math.floor(100000 + Math.random() * 900000).toString(), // Random 6 digit
+=======
+    topic:     `${user?.fullName?.split(' ')[0] || 'My'}'s Instant Meeting`,
+    usePMI:    false,
+    passcode:  Math.floor(100000 + Math.random() * 900000).toString(),
+>>>>>>> ravindu/master
     hostVideo: true,
-    hostAudio: true
+    hostAudio: true,
   });
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+  const [camReady, setCamReady] = useState(false);
 
-  const [pmi] = useState("394-201-992"); // Mock Personal ID
+<<<<<<< HEAD
+  const [stream, setStream] = useState(null);
 
-  const toggleConfig = (key) => {
-    setConfig({ ...config, [key]: !config[key] });
-  };
+  // 3. Access Real Camera on Load
+  useEffect(() => {
+    const getMedia = async () => {
+      try {
+        const currentStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true
+        });
+        setStream(currentStream);
+        if (videoRef.current) {
+          videoRef.current.srcObject = currentStream;
+        }
+      } catch (err) {
+        console.error("Camera Access Error:", err);
+      }
+    };
 
-  const handleChange = (e) => {
-    setConfig({ ...config, [e.target.name]: e.target.value });
-  };
+    getMedia();
 
+    // Cleanup: Stop tracks when leaving page (optional, or let Room take over)
+    return () => {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
+  // 4. Toggle Video/Audio Tracks Live
+  useEffect(() => {
+    if (stream) {
+      const videoTrack = stream.getVideoTracks()[0];
+      const audioTrack = stream.getAudioTracks()[0];
+      
+      if (videoTrack) videoTrack.enabled = config.hostVideo;
+      if (audioTrack) audioTrack.enabled = config.hostAudio;
+    }
+  }, [config.hostVideo, config.hostAudio, stream]);
+=======
+  // ── Real camera preview — stopped on unmount so cam light goes off ──────
+  useEffect(() => {
+    let active = true;
+    if (config.hostVideo) {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(stream => {
+          if (!active) { stream.getTracks().forEach(t => t.stop()); return; }
+          streamRef.current = stream;
+          if (videoRef.current) videoRef.current.srcObject = stream;
+          setCamReady(true);
+        })
+        .catch(() => setCamReady(false));
+    } else {
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = null;
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCamReady(false);
+    }
+    return () => {
+      active = false;
+      streamRef.current?.getTracks().forEach(t => t.stop());
+    };
+  }, [config.hostVideo]);
+>>>>>>> ravindu/master
+
+  const formattedPMI = user?.pmi
+    ? `${user.pmi.slice(0,3)}-${user.pmi.slice(3,6)}-${user.pmi.slice(6,9)}`
+    : '---';
+
+  const toggle = (key) => setConfig(p => ({ ...p, [key]: !p[key] }));
+
+<<<<<<< HEAD
   const handleStart = () => {
-    console.log("Starting Meeting with Config:", config);
-    // In a real app, you would create the room ID on the backend here
-    navigate('/room'); 
+    // FIX: Use 'user.pmi' instead of 'user.meetingId'
+    // If config.usePMI is true, use user.pmi. Otherwise, generate a random ID.
+    const meetingId = config.usePMI 
+        ? user?.pmi 
+        : Math.floor(100000000 + Math.random() * 900000000).toString();
+    
+    // Safety Check: If ID is somehow missing, alert the user
+    if (!meetingId) {
+        alert("Error: Could not retrieve Meeting ID. Please try again.");
+        return;
+    }
+
+    // Navigate
+    navigate(`/room/${meetingId}`, { 
+      state: { 
+        micOn: config.hostAudio,
+        videoOn: config.hostVideo,
+        isHost: true
+      } 
+    });
+=======
+  const handleStart = async () => {
+    setLoading(true); setError('');
+    try {
+      const meeting = await meetingAPI.create({
+        title:              config.topic,
+        usePMI:             config.usePMI,
+        passcode:           config.passcode,
+        hostVideoOn:        config.hostVideo,
+        participantVideoOn: true,
+      });
+      // Stop preview stream before navigating — Room will restart camera
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      navigate(`/room/${meeting.roomId}`, {
+        state: { meetingId: meeting.id, title: meeting.title, isHost: true,
+                 audio: config.hostAudio, video: config.hostVideo },
+      });
+    } catch (err) {
+      setError(err.message);
+      setLoading(false);
+    }
+>>>>>>> ravindu/master
   };
 
   return (
-    <div className="launch-wrapper">
+    <div className="page-wrapper">
       <Header />
+      <main className="flex-1 page-container py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
 
-      <div className="launch-container">
-        
-        {/* --- LEFT: Host Configuration --- */}
-        <div className="launch-panel">
-          <div className="panel-header">
-            <div className="icon-badge orange"><FaRocket /></div>
-            <h2>Start New Meeting</h2>
-            <p>Configure your instant meeting settings.</p>
-          </div>
+          {/* ── LEFT: Config ── */}
+          <div className="card space-y-6">
+            {/* Header */}
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-2xl bg-sage-100 text-sage-600
+                              flex items-center justify-center text-lg">
+                <FaRocket />
+              </div>
+              <div>
+                <h2 className="page-title">Start New Meeting</h2>
+                <p className="page-desc">Configure your instant meeting</p>
+              </div>
+            </div>
 
-          <div className="config-form">
-            
             {/* Topic */}
-            <div className="form-group">
-              <label>Meeting Topic</label>
-              <input 
-                type="text" 
-                name="topic" 
-                value={config.topic} 
-                onChange={handleChange}
-                className="topic-input"
+            <div>
+              <label className="input-label">Meeting Topic</label>
+              <input
+                type="text"
+                value={config.topic}
+                onChange={e => setConfig(p => ({...p, topic: e.target.value}))}
+                className="input"
               />
             </div>
 
+<<<<<<< HEAD
             {/* Meeting ID Selection */}
             <div className="id-selection">
-              <label className="id-option">
+              <label className={`id-option ${!config.usePMI ? 'selected' : ''}`}>
                 <input 
                   type="radio" 
                   name="idType" 
@@ -78,7 +220,7 @@ const NewMeeting = () => {
                 </div>
               </label>
 
-              <label className="id-option">
+              <label className={`id-option ${config.usePMI ? 'selected' : ''}`}>
                 <input 
                   type="radio" 
                   name="idType" 
@@ -89,31 +231,60 @@ const NewMeeting = () => {
                   <div className="radio-icon"><FaIdBadge /></div>
                   <div className="radio-text">
                     <span className="radio-title">Personal Meeting ID</span>
-                    <span className="radio-desc">{pmi}</span>
+                    
+                    {/* FIX: Use user.pmi here too */}
+                    <span className="radio-desc">{user?.pmi || "Loading..."}</span>
+                    
+=======
+            {/* Meeting ID */}
+            <div className="space-y-2">
+              <label className="input-label">Meeting ID</label>
+              {[
+                { key: false, icon: <FaRandom />, title: 'Generate Automatically', desc: 'Secure, one-time ID' },
+                { key: true,  icon: <FaIdBadge />, title: 'Personal Meeting ID',    desc: formattedPMI },
+              ].map(({ key, icon, title, desc }) => (
+                <label key={String(key)}
+                  className={`flex items-center gap-3 p-3.5 rounded-xl border-2 cursor-pointer
+                              transition-all duration-200
+                              ${ config.usePMI === key
+                                ? 'border-sage-400 bg-sage-50'
+                                : 'border-beige-300 bg-beige-50 hover:border-beige-400'}`}>
+                  <input type="radio" name="idType" checked={config.usePMI === key}
+                    onChange={() => setConfig(p => ({...p, usePMI: key}))}
+                    className="accent-sage-500" />
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-sm
+                                  ${ config.usePMI === key ? 'bg-sage-500 text-white' : 'bg-beige-200 text-charcoal-500'}`}>
+                    {icon}
                   </div>
-                </div>
-              </label>
+                  <div>
+                    <p className="text-sm font-semibold text-charcoal-800">{title}</p>
+                    <p className="text-xs text-charcoal-500">{desc}</p>
+>>>>>>> ravindu/master
+                  </div>
+                </label>
+              ))}
             </div>
 
-            {/* Passcode Display */}
-            <div className="passcode-row">
-              <div className="passcode-label">Security Passcode</div>
-              <div className="passcode-value">
-                {config.usePMI ? "ALEX123" : config.passcode}
+            {/* Passcode */}
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-beige-100 border border-beige-300">
+              <div className="flex items-center gap-2 text-sm text-charcoal-700">
+                <FaLock className="text-sage-500" /> Security Passcode
               </div>
+              <span className="font-mono text-sm font-semibold text-charcoal-800
+                               bg-white border border-beige-300 px-3 py-1 rounded-lg">
+                {config.passcode}
+              </span>
             </div>
 
-            {/* Start Button */}
-            <div className="launch-action">
-              <button className="btn-launch" onClick={handleStart}>
-                Start Meeting
-              </button>
-              <p className="launch-hint">By starting, you agree to host responsibilities.</p>
-            </div>
+            {error && <div className="alert-error">{error}</div>}
 
+            <button onClick={handleStart} disabled={loading}
+              className="btn-primary w-full py-3 text-base">
+              {loading ? <><span className="spinner" /> Starting…</> : <><FaRocket /> Start Meeting</>}
+            </button>
           </div>
-        </div>
 
+<<<<<<< HEAD
         {/* --- RIGHT: Tech Preview (Host Mode) --- */}
         <div className="preview-panel-host">
           <div className="preview-label">HOST PREVIEW</div>
@@ -121,34 +292,38 @@ const NewMeeting = () => {
           <div className="host-camera-card">
             
             {/* Video Feed */}
-            <div className={`video-feed ${!config.hostVideo ? 'video-off' : ''}`}>
-              {config.hostVideo ? (
-                <div className="live-sim">
-                  <div className="face-sim host-face"></div>
-                  <div className="mic-indicator">
-                    <div className={`bar ${config.hostAudio ? 'active' : ''}`}></div>
-                    <div className={`bar ${config.hostAudio ? 'active' : ''}`}></div>
-                  </div>
-                </div>
-              ) : (
-                <div className="host-avatar">A</div>
-              )}
+            <div className="video-feed">
+                {/* 7. REAL VIDEO ELEMENT */}
+                <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    muted 
+                    playsInline
+                    className={`real-video-preview ${!config.hostVideo ? 'hidden' : ''}`}
+                />
 
-              {/* Overlay Controls */}
-              <div className="feed-overlay">
-                <button 
-                  className={`overlay-btn ${config.hostAudio ? '' : 'btn-off'}`}
-                  onClick={() => toggleConfig('hostAudio')}
-                >
-                  {config.hostAudio ? <FaMicrophone /> : <FaMicrophoneSlash />}
-                </button>
-                <button 
-                  className={`overlay-btn ${config.hostVideo ? '' : 'btn-off'}`}
-                  onClick={() => toggleConfig('hostVideo')}
-                >
-                  {config.hostVideo ? <FaVideo /> : <FaVideoSlash />}
-                </button>
-              </div>
+                {/* Avatar Fallback */}
+                {!config.hostVideo && (
+                    <div className="host-avatar">
+                        {user?.firstName ? user.firstName.charAt(0) : 'U'}
+                    </div>
+                )}
+
+                {/* Overlay Controls */}
+                <div className="feed-overlay">
+                    <button 
+                        className={`overlay-btn ${config.hostAudio ? '' : 'btn-off'}`}
+                        onClick={() => toggleConfig('hostAudio')}
+                    >
+                        {config.hostAudio ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                    </button>
+                    <button 
+                        className={`overlay-btn ${config.hostVideo ? '' : 'btn-off'}`}
+                        onClick={() => toggleConfig('hostVideo')}
+                    >
+                        {config.hostVideo ? <FaVideo /> : <FaVideoSlash />}
+                    </button>
+                </div>
             </div>
 
             <div className="card-footer">
@@ -157,14 +332,76 @@ const NewMeeting = () => {
                 {config.hostVideo ? "System Ready" : "Video Paused"}
               </div>
               <div className="volume-slider">
-                <div className="volume-track"><div className="volume-level" style={{width: '70%'}}></div></div>
+                <div className="volume-track">
+                    <div className="volume-level" style={{width: config.hostAudio ? '70%' : '0%'}}></div>
+                </div>
               </div>
+=======
+          {/* ── RIGHT: Real Camera Preview ── */}
+          <div className="card flex flex-col gap-5">
+            <div>
+              <h3 className="section-title">Host Preview</h3>
+              <p className="section-subtitle">How you'll appear to others</p>
             </div>
 
+            {/* Video preview */}
+            <div className="relative bg-slate-900 rounded-2xl overflow-hidden aspect-video
+                            flex items-center justify-center">
+              <video ref={videoRef} autoPlay playsInline muted
+                className={`w-full h-full object-cover transition-opacity duration-300
+                            ${config.hostVideo && camReady ? 'opacity-100' : 'opacity-0'}`} />
+              {(!config.hostVideo || !camReady) && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <div className="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center
+                                  text-2xl font-bold text-white">
+                    {user?.fullName?.charAt(0) || 'U'}
+                  </div>
+                  <p className="text-slate-400 text-sm">
+                    {config.hostVideo ? 'Connecting camera…' : 'Camera off'}
+                  </p>
+                </div>
+              )}
+              {config.hostVideo && camReady && (
+                <span className="absolute top-3 right-3 flex items-center gap-1.5
+                                 text-[10px] font-semibold text-white bg-green-600/80
+                                 px-2 py-0.5 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                  LIVE PREVIEW
+                </span>
+              )}
+            </div>
+
+            {/* Cam / Mic toggles */}
+            <div className="flex gap-3">
+              <button onClick={() => toggle('hostVideo')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                            text-sm font-semibold transition-all duration-200
+                            ${ config.hostVideo
+                              ? 'bg-sage-100 text-sage-700 hover:bg-sage-200'
+                              : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'}`}>
+                {config.hostVideo ? <FaVideo /> : <FaVideoSlash />}
+                {config.hostVideo ? 'Camera On' : 'Camera Off'}
+              </button>
+              <button onClick={() => toggle('hostAudio')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl
+                            text-sm font-semibold transition-all duration-200
+                            ${ config.hostAudio
+                              ? 'bg-sage-100 text-sage-700 hover:bg-sage-200'
+                              : 'bg-red-50 text-red-600 hover:bg-red-100 border border-red-200'}`}>
+                {config.hostAudio ? <FaMicrophone /> : <FaMicrophoneSlash />}
+                {config.hostAudio ? 'Mic On' : 'Mic Off'}
+              </button>
+>>>>>>> ravindu/master
+            </div>
+
+            <p className="text-xs text-charcoal-500 text-center">
+              Camera preview will stop when you start the meeting.
+              You can change settings inside the room.
+            </p>
           </div>
         </div>
-
-      </div>
+      </main>
+      <Footer />
     </div>
   );
 };

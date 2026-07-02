@@ -1,109 +1,409 @@
+/**
+ * AuthForm.jsx
+ *
+ * FIX: Was calling AuthContext#login() as if it were an API method.
+ * AuthContext#login() only saves state; it does NOT call the server.
+ * 
+ * Correct flow:
+ *   1. Call authAPI.login() / authAPI.register() to hit the server → sets JWT cookie
+ *   2. Pass the returned user object to AuthContext#login() → saves to state + localStorage
+ *   3. navigate('/dashboard')
+ */
 import React, { useState } from 'react';
+<<<<<<< HEAD
 import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight } from 'react-icons/fa';
+// 1. Remove useNavigate here, because AuthContext handles navigation (or we can keep it for safety)
+// But strictly following our previous Context code, the Context does the navigation.
+// However, sticking to your request to NOT damage code, I will use the logic cleanly.
+import { FaUser, FaEnvelope, FaLock, FaGoogle, FaGithub, FaArrowRight, FaExclamationCircle } from 'react-icons/fa';
+import { useAuth } from '../context/AuthContext'; // 2. Import the Hook
 import './styles/AuthForm.css';
 
 const AuthForm = () => {
-
-  const navigate = useNavigate();
+  // const navigate = useNavigate(); // Context handles navigation now
+  const { login, register } = useAuth(); // 3. Get functions from Context
   const [isLogin, setIsLogin] = useState(true);
+  const [error, setError] = useState(''); // 4. State for error messages
+  const [loading, setLoading] = useState(false); // 5. State for loading button
+=======
+import { useNavigate } from 'react-router-dom';
+import {
+  FaEnvelope, FaLock, FaUser, FaEye, FaEyeSlash,
+  FaVideo, FaArrowRight, FaLeaf,
+} from 'react-icons/fa';
+import { useAuth }  from '../context/AuthContext';
+import { authAPI }  from '../services/api';
 
-  // Toggle between Login and Register
-  const toggleMode = () => setIsLogin(!isLogin);
+const AuthForm = () => {
+  const navigate  = useNavigate();
+  const { login } = useAuth();       // login() = save user to state + localStorage
+>>>>>>> ravindu/master
 
-  const handleSubmit = (e) => {
-  e.preventDefault();
-  // Simulate login success
-  console.log("Logged in!");
-  navigate('/dashboard'); // <--- Navigation Magic
-};
+  const [mode,     setMode]     = useState('login');
+  const [showPass, setShowPass] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
+  const [success,  setSuccess]  = useState('');
 
-  // Animation Variants
-  const formVariants = {
-    hidden: { opacity: 0, x: -50 },
-    visible: { opacity: 1, x: 0, transition: { duration: 0.5 } },
-    exit: { opacity: 0, x: 50, transition: { duration: 0.3 } }
+<<<<<<< HEAD
+  // Handle Input Change
+  const handleChange = (e) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+    setError(''); // Clear error when user types
+  };
+
+  // Toggle Mode
+  const toggleMode = () => {
+    setIsLogin((prev) => !prev);
+    // Reset data to avoid confusion on switch
+    setFormData({ fullName: '', email: '', password: '', confirmPassword: '' });
+    setError('');
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    if (isLogin) {
+      // --- LOGIN LOGIC ---
+      const result = await login(formData.email, formData.password);
+      if (!result.success) {
+        setError(result.error || "Login failed. Check credentials.");
+      }
+    } else {
+      // --- REGISTER LOGIC ---
+      if (formData.password !== formData.confirmPassword) {
+        setError("Passwords do not match!");
+        setLoading(false);
+        return;
+      }
+      
+      const result = await register(formData.fullName, formData.email, formData.password);
+      if (!result.success) {
+        setError(result.error || "Registration failed. Try again.");
+      }
+    }
+    
+    setLoading(false);
+    // Note: Navigation to /dashboard happens inside AuthContext on success
+=======
+  const [formData, setFormData] = useState({ fullName: '', email: '', password: '' });
+
+  const handleChange = (e) =>
+    setFormData(p => ({ ...p, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError(''); setSuccess('');
+    setLoading(true);
+
+    try {
+      let userData;
+
+      if (mode === 'login') {
+        // Step 1: hit the server — sets the httpOnly JWT cookie
+        userData = await authAPI.login({
+          email:    formData.email,
+          password: formData.password,
+        });
+      } else {
+        // Step 1: register — server creates user + sets cookie
+        userData = await authAPI.register({
+          fullName: formData.fullName,
+          email:    formData.email,
+          password: formData.password,
+        });
+        setSuccess('Account created! Redirecting…');
+      }
+
+      // Step 2: save user to AuthContext state + localStorage
+      login(userData);
+
+      // Step 3: navigate (small delay for register to show success msg)
+      if (mode === 'login') {
+        navigate('/dashboard', { replace: true });
+      } else {
+        setTimeout(() => navigate('/dashboard', { replace: true }), 1000);
+      }
+
+    } catch (err) {
+      setError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+>>>>>>> ravindu/master
   };
 
   return (
-    <div className="auth-card-glass">
-      {/* Header Section */}
-      <div className="auth-header">
-        <h2>{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
-        <p>
-          {isLogin 
-            ? 'Enter your details to access your meetings.' 
-            : 'Join Amigo to start connecting with the world.'}
-        </p>
+    <div className="min-h-screen bg-hero flex">
+
+      {/* ── LEFT — Brand panel ── */}
+      <div className="hidden lg:flex flex-col justify-between w-[42%] bg-gradient-sage p-12 relative overflow-hidden">
+        <div className="absolute -top-16 -left-16 w-64 h-64 rounded-full bg-white/5" />
+        <div className="absolute bottom-24 -right-20 w-80 h-80 rounded-full bg-white/5" />
+
+        {/* Logo */}
+        <div className="flex items-center gap-3 relative z-10">
+          <div className="w-10 h-10 rounded-2xl bg-white/20 flex items-center justify-center">
+            <FaVideo className="text-white text-base" />
+          </div>
+          <span className="font-display font-bold text-xl text-white">Amigo</span>
+        </div>
+
+        {/* Hero copy */}
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-6">
+            <FaLeaf className="text-white/70 text-sm" />
+            <span className="text-white/70 text-sm font-medium">Calm. Collaborative. Connected.</span>
+          </div>
+          <h1 className="font-display font-bold text-4xl text-white leading-tight mb-4">
+            Your team’s meeting space, reimagined
+          </h1>
+          <p className="text-white/75 text-base leading-relaxed max-w-xs">
+            A distraction-free environment designed to reduce meeting fatigue and help your team do their best work.
+          </p>
+          <div className="flex flex-wrap gap-2 mt-8">
+            {['HD Video', 'Screen Share', 'Chat', 'Recordings', 'Team Spaces'].map(f => (
+              <span key={f} className="px-3 py-1 rounded-full bg-white/15 text-white text-xs font-medium">{f}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Testimonial */}
+        <div className="relative z-10 bg-white/10 backdrop-blur-sm rounded-2xl p-5">
+          <p className="text-white/90 text-sm leading-relaxed">
+            “Amigo changed how our remote team collaborates. The calm interface genuinely reduces meeting stress.”
+          </p>
+          <div className="flex items-center gap-3 mt-4">
+            <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">SK</div>
+            <div>
+              <p className="text-white text-xs font-semibold">Sarah Kim</p>
+              <p className="text-white/60 text-[11px]">Head of Engineering, NovaTech</p>
+            </div>
+          </div>
+        </div>
       </div>
+
+<<<<<<< HEAD
+      {/* NEW: Error Message Banner */}
+      {error && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="error-banner"
+          style={{ 
+            background: 'rgba(239, 68, 68, 0.2)', 
+            border: '1px solid rgba(239, 68, 68, 0.5)',
+            color: '#fca5a5',
+            padding: '10px',
+            borderRadius: '8px',
+            marginBottom: '15px',
+            fontSize: '0.9rem',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <FaExclamationCircle /> {error}
+        </motion.div>
+      )}
 
       {/* Form Section */}
       <form onSubmit={handleSubmit} className="auth-form-container">
-        <AnimatePresence mode='wait'>
-          
-          {/* REGISTER: Name Input (Only shows if NOT login) */}
+        
+        {/* 1. Full Name (Only shows in Register mode) */}
+        <AnimatePresence>
           {!isLogin && (
             <motion.div 
-              key="name-field"
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="input-group"
+              key="fullname-field"
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
             >
-              <FaUser className="input-icon" />
-              <input type="text" placeholder="Full Name" required />
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <FaUser className="input-icon" />
+                <input 
+                  type="text" 
+                  name="fullName"
+                  placeholder="Full Name" 
+                  value={formData.fullName}
+                  onChange={handleChange}
+                  required={!isLogin} 
+                />
+              </div>
             </motion.div>
           )}
+        </AnimatePresence>
 
-          {/* COMMON: Email Input */}
-          <div className="input-group">
-            <FaEnvelope className="input-icon" />
-            <input type="email" placeholder="Email Address" required />
-          </div>
+        {/* 2. Email (Always Visible) */}
+        <div className="input-group">
+          <FaEnvelope className="input-icon" />
+          <input 
+            type="email" 
+            name="email"
+            placeholder="Email Address" 
+            value={formData.email}
+            onChange={handleChange}
+            required 
+          />
+        </div>
 
-          {/* COMMON: Password Input */}
-          <div className="input-group">
-            <FaLock className="input-icon" />
-            <input type="password" placeholder="Password" required />
-          </div>
-          
+        {/* 3. Password (Always Visible) */}
+        <div className="input-group">
+          <FaLock className="input-icon" />
+          <input 
+            type="password" 
+            name="password"
+            placeholder="Password" 
+            value={formData.password}
+            onChange={handleChange}
+            required 
+          />
+        </div>
+
+        {/* 4. Confirm Password (Only shows in Register mode) */}
+        <AnimatePresence>
+          {!isLogin && (
+            <motion.div 
+              key="confirm-field"
+              initial={{ height: 0, opacity: 0, marginBottom: 0 }}
+              animate={{ height: 'auto', opacity: 1, marginBottom: 20 }}
+              exit={{ height: 0, opacity: 0, marginBottom: 0 }}
+              transition={{ duration: 0.3 }}
+              style={{ overflow: 'hidden' }}
+            >
+              <div className="input-group" style={{ marginBottom: 0 }}>
+                <FaLock className="input-icon" />
+                <input 
+                  type="password" 
+                  name="confirmPassword"
+                  placeholder="Confirm Password" 
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  required={!isLogin}
+                />
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
 
         {/* Forgot Password Link (Login Only) */}
         {isLogin && (
           <div className="forgot-pass">
             <a href="#">Forgot Password?</a>
+=======
+      {/* ── RIGHT — Form panel ── */}
+      <div className="flex-1 flex items-center justify-center px-6 py-12 bg-beige-50">
+        <div className="w-full max-w-md animate-slide-up">
+
+          {/* Mobile logo */}
+          <div className="flex items-center gap-2 mb-8 lg:hidden">
+            <div className="w-8 h-8 rounded-xl bg-gradient-sage flex items-center justify-center">
+              <FaVideo className="text-white text-sm" />
+            </div>
+            <span className="font-display font-bold text-lg text-charcoal-900">Amigo</span>
+>>>>>>> ravindu/master
           </div>
-        )}
 
+<<<<<<< HEAD
         {/* Submit Button */}
-        <motion.button 
-          className="btn-submit-gradient"
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-        >
-          {isLogin ? 'Sign In' : 'Sign Up'} <FaArrowRight />
-        </motion.button>
+        <button type="submit" className="btn-submit-gradient" disabled={loading}>
+          {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Sign Up')} 
+          {!loading && <FaArrowRight style={{ marginLeft: '8px' }}/>}
+        </button>
+=======
+          <div className="card p-8">
+            {/* Heading */}
+            <div className="mb-8">
+              <h2 className="text-2xl font-display font-bold text-charcoal-900">
+                {mode === 'login' ? 'Welcome back' : 'Create account'}
+              </h2>
+              <p className="text-sm text-charcoal-500 mt-1.5">
+                {mode === 'login'
+                  ? 'Sign in to your Amigo workspace'
+                  : 'Join thousands of calm collaborators'}
+              </p>
+            </div>
+>>>>>>> ravindu/master
 
-        {/* Divider */}
-        <div className="divider"><span>OR</span></div>
+            {error   && <div className="alert-error mb-5">{error}</div>}
+            {success && <div className="alert-success mb-5">{success}</div>}
 
-        {/* Social Buttons */}
-        <div className="social-login">
-          <button type="button" className="social-btn"><FaGoogle /> Google</button>
-          <button type="button" className="social-btn"><FaGithub /> GitHub</button>
+            <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+
+              {mode === 'register' && (
+                <div>
+                  <label className="input-label">Full Name</label>
+                  <div className="input-group">
+                    <FaUser className="input-icon" />
+                    <input type="text" name="fullName" value={formData.fullName}
+                      onChange={handleChange} className="input-with-icon"
+                      placeholder="Jane Smith" required autoFocus />
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="input-label">Email Address</label>
+                <div className="input-group">
+                  <FaEnvelope className="input-icon" />
+                  <input type="email" name="email" value={formData.email}
+                    onChange={handleChange} className="input-with-icon"
+                    placeholder="you@amigo.com" required
+                    autoFocus={mode === 'login'} />
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="input-label mb-0">Password</label>
+                  {mode === 'login' && (
+                    <button type="button"
+                      className="text-xs text-mint-600 hover:text-mint-700 font-medium transition-colors">
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="input-group">
+                  <FaLock className="input-icon" />
+                  <input
+                    type={showPass ? 'text' : 'password'}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleChange}
+                    className="input-with-icon pr-10"
+                    placeholder={mode === 'register' ? 'Min. 8 characters' : 'Your password'}
+                    required
+                    minLength={mode === 'register' ? 8 : undefined}
+                  />
+                  <button type="button" onClick={() => setShowPass(p => !p)}
+                    className="absolute right-3.5 text-charcoal-400 hover:text-charcoal-600 transition-colors">
+                    {showPass ? <FaEyeSlash className="text-sm" /> : <FaEye className="text-sm" />}
+                  </button>
+                </div>
+              </div>
+
+              <button type="submit" disabled={loading}
+                className="btn-primary w-full justify-center mt-1 py-3 text-base disabled:opacity-60">
+                {loading
+                  ? <span className="spinner border-white/30 border-t-white" />
+                  : <>{mode === 'login' ? 'Sign In' : 'Create Account'} <FaArrowRight className="text-xs" /></>}
+              </button>
+            </form>
+
+            <p className="text-center text-sm text-charcoal-500 mt-6">
+              {mode === 'login' ? "Don't have an account?" : 'Already have an account?'}{' '}
+              <button type="button"
+                onClick={() => { setMode(m => m === 'login' ? 'register' : 'login'); setError(''); setSuccess(''); }}
+                className="text-sage-600 font-semibold hover:text-sage-700 transition-colors">
+                {mode === 'login' ? 'Sign up free' : 'Sign in'}
+              </button>
+            </p>
+          </div>
         </div>
-      </form>
-
-      {/* Toggle Footer */}
-      <div className="auth-footer">
-        <p>
-          {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <span onClick={toggleMode} className="toggle-link">
-            {isLogin ? 'Register' : 'Login'}
-          </span>
-        </p>
       </div>
     </div>
   );
